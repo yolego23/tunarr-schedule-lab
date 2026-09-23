@@ -229,25 +229,70 @@ export async function render(root, { go }) {
   /** New channel (ch = null), edit basics (ch), or copy (ch, copy = true). */
   async function editBasics(ch, copy = false) {
     const isNew = !ch;
-    const suggested = isNew || copy ? (await api('GET', '/api/channels/next-number').catch(() => ({ number: '' }))).number : ch.number;
+    const all = store.channels || [];
+    // Groups, most used first.
+    const counts = new Map();
+    for (const c of all) if (c.groupTitle) counts.set(c.groupTitle, (counts.get(c.groupTitle) || 0) + 1);
+    const groups = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a.localeCompare(b));
+    const NEW_GROUP = '\u0000new';
+    const startGroup = isNew ? (groups[0] || '') : (ch.groupTitle || '');
+
     const name = h('input', { type: 'text', value: isNew ? '' : copy ? ch.name + ' (copy)' : ch.name, placeholder: 'Saturday Morning Cartoons' });
-    const number = h('input', { type: 'number', min: 1, max: 9999, step: 1, value: String(suggested ?? '') });
-    const groups = [...new Set((store.channels || []).map(c => c.groupTitle).filter(Boolean))];
-    const group = h('input', { type: 'text', value: isNew ? (groups[0] || '') : ch.groupTitle || '', list: 'channel-groups' });
+    const groupSelect = h('select', null,
+      groups.map(g => h('option', { value: g, selected: g === startGroup }, g + ' (' + counts.get(g) + ')')),
+      h('option', { value: NEW_GROUP, selected: !groups.length }, '+ New group…'));
+    const newGroup = h('input', { type: 'text', placeholder: 'New group name', hidden: groups.length > 0 });
+    const number = h('input', { type: 'number', min: 1, max: 9999, step: 1, value: isNew || copy ? '' : String(ch.number) });
+    const numberHint = h('span', { class: 'hint' });
+    let numberTouched = !isNew && !copy; // editing: keep the channel's own number unless changed
+
+    const groupValue = () => (groupSelect.value === NEW_GROUP ? newGroup.value.trim() : groupSelect.value);
+    const checkTaken = () => {
+      const n = Number(number.value);
+      const clash = all.find(c => c.number === n && (!ch || copy || c.id !== ch.id));
+      if (clash) { numberHint.textContent = 'Taken by ' + clash.name + '.'; numberHint.className = 'hint err-text'; return; }
+      if (numberHint.classList.contains('err-text')) { numberHint.textContent = ''; numberHint.className = 'hint'; }
+    };
+    let seq = 0;
+    const suggest = async () => {
+      if (numberTouched) return;
+      const mine = ++seq;
+      const q = new URLSearchParams();
+      if (copy) q.set('after', ch.id);
+      else q.set('group', groupSelect.value === NEW_GROUP ? '' : groupSelect.value);
+      try {
+        const r = await api('GET', '/api/channels/next-number?' + q);
+        if (mine !== seq || numberTouched) return;
+        number.value = String(r.number);
+        numberHint.textContent = 'Suggested: ' + r.reason + '.';
+        numberHint.className = 'hint';
+      } catch { /* leave it for the user */ }
+    };
+    groupSelect.onchange = () => {
+      newGroup.hidden = groupSelect.value !== NEW_GROUP;
+      if (!newGroup.hidden) newGroup.focus();
+      suggest();
+    };
+    number.oninput = () => { numberTouched = true; numberHint.textContent = ''; checkTaken(); };
+    suggest();
+
     const title = isNew ? 'New channel' : copy ? 'Copy ' + ch.name : 'Edit ' + ch.name;
     modal({
       title,
       body: h('div', null,
-        isNew ? h('p', { class: 'dim small' }, 'Creates an empty channel in Tunarr with its default settings. Then pick a sort here and preview and apply a lineup.') : null,
+        isNew ? h('p', { class: 'dim small' }, 'Creates an empty channel in Tunarr with its default settings. It starts with no shows: see "Adding shows" below.') : null,
         copy ? h('p', { class: 'dim small' }, "Tunarr copies the channel's settings and lineup. Its sort and setting values in Schedule Lab are copied too.") : null,
         h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Name'), name),
         h('div', { class: 'row' },
-          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Number'), number),
-          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Group'), group, h('datalist', { id: 'channel-groups' }, groups.map(g => h('option', { value: g })))))),
+          h('div', { class: 'field' }, h('span', { class: 'lab' }, 'Group'), groupSelect, newGroup),
+          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Number'), number, numberHint)),
+        isNew ? h('p', { class: 'dim small' }, h('b', null, 'Adding shows: '),
+          'for now, add programming to the new channel in Tunarr (its Programming page). Schedule Lab then sorts whatever the channel has. The next update (pool sources) lets you pick shows, seasons and library rules right here.') : null),
       actions: [
         { label: 'Cancel', kind: 'ghost' },
         { label: isNew ? 'Create channel' : copy ? 'Copy channel' : 'Save', kind: 'primary', onClick: async () => {
-          const body = { name: name.value, number: number.value === '' ? undefined : Number(number.value), groupTitle: group.value };
+          if (groupSelect.value === NEW_GROUP && !newGroup.value.trim()) { toast('Type a name for the new group.', 'warn'); newGroup.focus(); return false; }
+          const body = { name: name.value, number: number.value === '' ? undefined : Number(number.value), groupTitle: groupValue() };
           try {
             let result;
             if (isNew) result = await api('POST', '/api/channels', body);

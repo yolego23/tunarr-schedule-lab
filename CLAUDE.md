@@ -46,7 +46,8 @@ Automations, Settings (global settings and global variables).
 - **2.1** (in progress, 2.1.0-beta.N):
   - Watch Tracker and `ctx.history` (done in 2.1.0-beta.1).
   - AI settings (Anthropic, OpenRouter, Ollama), channel management, guide check (done in 2.1.0-beta.2).
-  - Pool sources + library rules (beta.3), Channel Builder (beta.4), coded Automations + library (beta.5).
+  - New-channel dialog: group dropdown, group-aware number suggestions (done in 2.1.0-beta.3).
+  - Pool sources + library rules (beta.4), Channel Builder (beta.5), coded Automations + library (beta.6).
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.

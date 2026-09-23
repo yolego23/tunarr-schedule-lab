@@ -194,3 +194,14 @@ test('scheduleWindow walks a looping lineup from the channel start time', () => 
   assert.deepEqual(guide.scheduleWindow(lineup, 100, 135, 165).map(e => `${e.id}@${e.start}`), ['a@130', 'b@140', 'a@160']);
   assert.deepEqual(guide.scheduleWindow(lineup, 100, 95, 105).map(e => `${e.id}@${e.start}`), ['b@80', 'a@100']);
 });
+
+test('number suggestions follow the group, the copied channel, or the next block of 100', async () => {
+  const taken = new Set([...channels.values()].map(c => c.number));
+  const byGroup = await admin.suggestNumber({ group: 'tunarr' });
+  const groupTop = Math.max(...[...channels.values()].filter(c => c.groupTitle === 'tunarr').map(c => c.number));
+  assert.ok(byGroup.number > groupTop && !taken.has(byGroup.number), JSON.stringify(byGroup));
+  const afterCopy = await admin.suggestNumber({ afterId: '11111111-1111-4111-8111-111111111111' });
+  assert.ok(afterCopy.number > channels.get('11111111-1111-4111-8111-111111111111').number && !taken.has(afterCopy.number));
+  addChannel('44444444-4444-4444-8444-444444444444', 212, 'Cartoon Network');
+  assert.deepEqual(await admin.suggestNumber({ group: 'Brand new' }), { number: 300, reason: 'start of the next free block of 100 (300)' });
+});

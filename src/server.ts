@@ -18,7 +18,7 @@ import { allSettings, resetAppSetting, saveAppSetting } from './app-settings.ts'
 import { deleteGlobal, listGlobals, saveGlobal } from './globals.ts';
 import { storageStatus } from './storage-check.ts';
 import { PROVIDERS, listModels, listUsage, publicAiConfig, saveAiConfig, testProvider, type Provider } from './ai.ts';
-import { copyChannel, createChannel, deleteChannel, listArchive, nextFreeNumber, recreateChannel, updateChannelBasics } from './channel-admin.ts';
+import { copyChannel, createChannel, deleteChannel, listArchive, recreateChannel, suggestNumber, updateChannelBasics } from './channel-admin.ts';
 import { checkGuide } from './guide-check.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 
@@ -74,7 +74,7 @@ route('GET', '/api/channels/:id/data', async ({ params, query }) => {
 });
 // Channel management (Tunarr channels themselves).
 route('POST', '/api/channels', ({ body }) => createChannel(body || {}));
-route('GET', '/api/channels/next-number', async () => ({ number: await nextFreeNumber(Math.max(0, ...(await tunarr.channels()).map(c => c.number))) }));
+route('GET', '/api/channels/next-number', ({ query }) => suggestNumber({ group: query.get('group') ?? undefined, afterId: query.get('after') ?? undefined }));
 route('GET', '/api/channels/archive', () => listArchive());
 route('POST', '/api/channels/archive/:archiveId/recreate', ({ params }) => recreateChannel(num(params.archiveId)));
 route('POST', '/api/channels/:id/copy', ({ params, body }) => copyChannel(params.id, body || {}));

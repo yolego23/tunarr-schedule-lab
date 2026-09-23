@@ -94,7 +94,11 @@ server's LAN address, not localhost.
 
 The Channels screen can create a new channel, copy one (Tunarr copies the
 settings and lineup; Schedule Lab copies the sort and its settings), rename,
-renumber, change the group, and delete. Deleting saves the channel's settings
+renumber, change the group, and delete. New channels pick their group from a
+list (or a new one) and get a suggested number: next to their group, right
+after the channel being copied, or the next free block of 100 for a new group.
+A new channel starts empty: add programming to it in Tunarr for now (pool
+sources, coming next, will let you pick shows here). Deleting saves the channel's settings
 and lineup first; "Deleted channels" recreates it with the same id, so its
 Schedule Lab setup and watch history come back too.
 
@@ -171,9 +175,9 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.2): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.3): Watch Tracker and `ctx.history`, AI settings,
   channel management and the guide check are done; pool sources and library
-  rules (beta.3), the Channel Builder (beta.4) and coded Automations (beta.5)
+  rules (beta.4), the Channel Builder (beta.5) and coded Automations (beta.6)
   are next.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.

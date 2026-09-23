@@ -67,6 +67,34 @@ export async function nextFreeNumber(after = 0): Promise<number> {
   return n;
 }
 
+/**
+ * Suggests a number for a new channel, following how channels are numbered:
+ * next to its group, right after the channel being copied, or at the start
+ * of the next free block of 100 for a new group.
+ */
+export async function suggestNumber(opts: { group?: string; afterId?: string }) {
+  const channels = await channelsNow();
+  const taken = new Set(channels.map(c => c.number));
+  const nextFree = (from: number) => { let n = Math.max(1, from); while (taken.has(n)) n++; return n; };
+  if (opts.afterId) {
+    const src = channels.find(c => c.id === opts.afterId);
+    if (src) return { number: nextFree(src.number + 1), reason: `next free after ${src.number} (${String(src.name).trim()})` };
+  }
+  const group = String(opts.group ?? '').trim();
+  const inGroup = channels.filter(c => String(c.groupTitle ?? '').trim() === group);
+  if (group && inGroup.length) {
+    const top = Math.max(...inGroup.map(c => c.number));
+    const n = nextFree(top + 1);
+    return { number: n, reason: `next free after ${group}'s highest channel (${top})` };
+  }
+  const max = Math.max(0, ...channels.map(c => c.number));
+  if (max >= 100) {
+    const block = (Math.floor(max / 100) + 1) * 100;
+    return { number: nextFree(block), reason: `start of the next free block of 100 (${block})` };
+  }
+  return { number: nextFree(max + 1), reason: 'next free number' };
+}
+
 async function defaultTranscodeConfigId(channels: TunarrChannel[]): Promise<string> {
   const configs = await tunarr.transcodeConfigs();
   const id = configs.find(c => c.isDefault)?.id || configs[0]?.id || (channels[0]?.transcodeConfigId as string | undefined);
@@ -78,7 +106,9 @@ async function defaultTranscodeConfigId(channels: TunarrChannel[]): Promise<stri
 export async function createChannel(input: ChannelBasics) {
   const channels = await channelsNow();
   const name = checkName(input.name);
-  const number = input.number === undefined || input.number === '' ? await nextFreeNumber(Math.max(0, ...channels.map(c => c.number))) : checkNumber(input.number, channels);
+  const number = input.number === undefined || input.number === ''
+    ? (await suggestNumber({ group: String(input.groupTitle ?? '') })).number
+    : checkNumber(input.number, channels);
   const created = await tunarr.createChannel({
     ...NEW_CHANNEL_DEFAULTS,
     id: randomUUID(),
