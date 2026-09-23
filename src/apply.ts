@@ -1,4 +1,4 @@
-// Apply & History: every change to a channel's lineup is backed up first
+// Applying lineups: every change to a channel's lineup is backed up first
 // (last 20 per channel) and can be undone.
 import { appSetting } from './app-settings.ts';
 import { db } from './db.ts';

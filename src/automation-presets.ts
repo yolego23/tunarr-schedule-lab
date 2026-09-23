@@ -29,7 +29,7 @@ candidates: number = 4             // Lineups to build and compare
 minLengthPercent: number = 50      // Refuse a lineup shorter than this % of the channel's lineup length
 */
 // Builds several lineups with different seeds, keeps the one the scoring
-// function (Preview & Compare) likes best, and applies it.
+// function (Compare) likes best, and applies it.
 async function run(ctx){
   const n = Math.max(1, Math.min(10, ctx.params.candidates || 4));
   let best = null;

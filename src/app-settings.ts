@@ -8,7 +8,7 @@ export interface AppSettings {
   channelDefaults: { targetHours: number; alignStart: boolean };
   /** Repeat colours on timelines, in minutes from the last airing's time of day. */
   thresholds: { tight: number; loose: number };
-  /** Preview & Compare: candidates per sort. */
+  /** Compare and "keep the best": candidates per sort. */
   candidates: number;
   backupsPerChannel: number;
   sortTimeLimitSec: number;

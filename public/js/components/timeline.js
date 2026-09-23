@@ -1,5 +1,5 @@
 // Timeline and repeat ranking views (from 1.8), shared by the Sort Builder
-// and Preview & Compare.
+// Compare and the channel's Rebuild and Lineup now tabs.
 import { h, escapeHtml, fmtDur } from '../ui.js';
 import { analyzeRepeats } from '/shared/analysis.js';
 

@@ -8,8 +8,8 @@ const SCREENS = [
   { path: 'channel-builder', label: 'Channel Builder', load: () => import('./views/channel-builder.js') },
   { path: 'builder', label: 'Sort Builder', load: () => import('./views/builder.js') },
   { path: 'library', label: 'Sort Library', load: () => import('./views/library.js') },
-  { path: 'preview', label: 'Preview & Compare', load: () => import('./views/preview.js') },
-  { path: 'apply', label: 'Apply & History', load: () => import('./views/apply.js') },
+  { path: 'preview', label: 'Compare', load: () => import('./views/preview.js') },
+  { path: 'history', label: 'History', aliases: ['apply'], load: () => import('./views/history.js') },
   { path: 'watch', label: 'Watch Tracker', load: () => import('./views/watch.js') },
   { path: 'automations', label: 'Automations', load: () => import('./views/automations.js') },
   { path: 'settings', label: 'Settings', load: () => import('./views/settings.js') },
@@ -65,7 +65,7 @@ window.addEventListener('beforeunload', e => {
 async function route() {
   flushAll();
   const { path, params } = parseHash();
-  const screen = SCREENS.find(s => s.path === path) || SCREENS[0];
+  const screen = SCREENS.find(s => s.path === path || s.aliases?.includes(path)) || SCREENS[0];
   for (const a of nav.children) a.classList.toggle('active', a.dataset.path === screen.path);
   document.title = `${screen.label} · Schedule Lab`;
   const seq = ++renderSeq;

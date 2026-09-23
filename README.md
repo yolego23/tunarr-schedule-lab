@@ -50,13 +50,21 @@ use a VPN to reach it from outside.
 1. **Sort Library → Import 1.8 sorts** loads no-repeat shuffle, full cycle,
    time-block insert, AI optimizer and the work-schedule sort as ordinary,
    editable entries. The app has no built-in sorts.
-2. **Channels**: pick a channel, choose its sort, fill in that channel's
-   settings (work hours are painted on a week grid) and the lineup length.
-   Changes save automatically.
-3. **Preview & Compare**: run the channel's sort (or several sorts, several
-   seeds each) and rank the candidates. Pick one → **Send to Apply**.
-4. **Apply & History**: Apply backs up the current lineup first (last 20 per
-   channel), writes the new one, and sets the channel start time. **Undo last change** or **Restore** any backup.
+2. **Channels → Setup tab**: pick a channel, choose its sort, fill in that
+   channel's settings (work hours are painted on a week grid) and the lineup
+   length. Changes save automatically.
+3. **Channels → Rebuild tab**: **Build preview** (or **Build 6, keep the
+   best** by score), look over the timeline, then **Apply**. Apply backs up
+   the current lineup first (last 20 per channel), writes the new one, sets
+   the channel start time, and checks the guide; **Undo** is right there. A
+   preview built before you changed the setup can't be applied until you
+   build again. The **↻** button next to a channel in the list does the same
+   in one step: it builds with the channel's sort and asks before applying.
+   **Lineup now** shows what the channel is playing.
+4. **Compare**: run several sorts (several seeds each) on a channel, rank
+   the candidates with the scoring function, and apply the one you pick.
+   **History**: every apply, undo and restore across channels; pick a channel
+   for its backups (**Restore**), **Undo last change** and the guide check.
 5. **Settings**: defaults for new channels, preview defaults and repeat
    colours, backups kept per channel, the sort time limit, and **global
    variables**.
@@ -145,7 +153,7 @@ new matching shows. They are ordinary entries: edit, copy or delete them.
 Rules every automation follows, whatever its code says:
 
 - it can read every channel but only changes the channel it's on;
-- an apply is backed up first (undo it on Apply & History), happens at most
+- an apply is backed up first (undo it on History), happens at most
   once per run, is never empty, and is refused if the new lineup is shorter
   than `minLengthPercent` (a setting, 50 by default) of the channel's lineup
   length;
@@ -208,7 +216,7 @@ Schedule Lab setup and watch history come back too.
 ## Guide check
 
 Tunarr can't be told to rebuild its guide, so after every apply, undo or
-restore, Apply & History checks the next 6 hours: whether Tunarr's schedule
+restore (on the Rebuild tab and on History) it checks the next 6 hours: whether Tunarr's schedule
 matches what was applied, and whether the XMLTV guide file TV apps download
 has caught up. "Check guide" runs it again at any time.
 
@@ -278,7 +286,7 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.10): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.11): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources, the Channel Builder and
   coded Automations with their library are done; library rules moved into
   automations.

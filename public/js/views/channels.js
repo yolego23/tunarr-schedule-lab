@@ -1,11 +1,12 @@
-// Channels: each channel's pool, its assigned library sort and version, its
-// own values for that sort's settings, and how long a lineup to build.
-// Changes save automatically.
+// Channels: each channel's setup (pool, sort and version, its own values for
+// the sort's settings, lineup length, automations), rebuilding it (build a
+// preview, apply, undo) and its lineup now, in tabs. Setup saves automatically.
 import { api, busy, clear, confirmDialog, fmtAgo, fmtDur, fmtWhen, h, modal, toast } from '../ui.js';
-import { addFlusher, channelLabel, findSort, forgetChannelData, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
+import { addFlusher, channelLabel, findChannel, findSort, forgetChannelData, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { poolEditor } from '../components/pool-editor.js';
 import { automationsCard } from '../components/automations.js';
+import { lineupTab, quickRebuild, rebuildTab } from '../components/rebuild.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
 export async function render(root, { go }) {
@@ -25,7 +26,7 @@ export async function render(root, { go }) {
 
   let channels = [];
   try {
-    [channels] = await Promise.all([loadChannels(), loadSorts(), loadGlobals(true)]);
+    [channels] = await Promise.all([loadChannels(), loadSorts(), loadGlobals(true), loadSettings()]);
   } catch (err) {
     clear(listBody, h('div', { class: 'empty' }, h('b', null, "Couldn't load channels"), err.message));
     return;
@@ -43,7 +44,11 @@ export async function render(root, { go }) {
           h('div', { style: { flex: 1, minWidth: 0 } },
             h('div', { class: 'name' }, c.name),
             h('div', { class: 'sub' }, c.sortName ? `${c.sortName} v${c.setup.sortVersion}` : 'no sort assigned')),
-          outdated ? h('span', { class: 'pill warn', title: `v${c.latestVersion} is available` }, 'update') : null);
+          outdated ? h('span', { class: 'pill warn', title: `v${c.latestVersion} is available` }, 'update') : null,
+          c.setup.sortId ? h('button', {
+            class: 'btn small ghost quick-rebuild', title: `Rebuild ${c.name} now with its sort and settings (you confirm before it's applied)`,
+            onclick: e => { e.stopPropagation(); busy(e.currentTarget, () => rebuildNow(c)); },
+          }, '↻') : null);
       })));
   }
   filter.addEventListener('input', drawList);
@@ -88,7 +93,6 @@ export async function render(root, { go }) {
         forgetChannelData(ch.id); // the pool may have changed
         ch.sortName = saved.sortId ? findSort(saved.sortId)?.name ?? null : null;
         ch.latestVersion = saved.sortId ? findSort(saved.sortId)?.latest_version ?? null : null;
-        previewBtn.disabled = !saved.sortId;
         drawList();
         if (!pending) { setStatus('ok', `Saved ${new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`); setUnsaved(unsavedKey, null); }
       }).catch(err => {
@@ -105,13 +109,11 @@ export async function render(root, { go }) {
         fetch(url, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
         pending = false;
         setUnsaved(unsavedKey, null);
-      } else saveNow();
+      } else return saveNow();
     };
     removeFlusher = addFlusher(flush);
     removeFlusher.flush = flush;
 
-    const previewBtn = h('button', { class: 'btn small', onclick: () => { flush(); go('preview', { channel: ch.id, run: '1' }); }, disabled: !setup.sortId, title: 'Assign a sort first to preview' }, 'Preview this channel');
-    const lineupCard = h('div', { class: 'card' }, h('h3', null, 'On Tunarr now'), h('div', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
     const sortCard = h('div', { class: 'card' });
     if (!setup.pool) setup.pool = { sources: [], exclusions: [] };
     // The pool was changed on the server (a suggestion added, a rule converted): reload it.
@@ -157,31 +159,44 @@ Library rules now live in automations.`,
     const autoCard = automationsCard({ channel: ch, go, onPoolChanged: () => reloadPool().catch(err => toast(err.message, 'err')) });
     const settingsCard = h('div', { class: 'card' });
 
+    // ---- tabs ----
+    const setupBody = h('div', { class: 'page-width' }, poolCard, sortCard, settingsCard, autoCard);
+    const rebuildBody = rebuildTab({
+      ch, setup, go, saveFirst: saveNow,
+      onApplied: async () => { await loadChannels(true); drawList(); },
+    });
+    let lineupBody = null;
+    const body = h('div', { class: 'panel-body' });
+    const foot = h('div', { class: 'panel-foot' });
+    const TABS = { setup: 'Setup', rebuild: 'Rebuild', lineup: 'Lineup now' };
+    const tabBtns = Object.entries(TABS).map(([k, label]) => h('button', { class: 'tab', onclick: () => showTab(k) }, label));
+    function showTab(k) {
+      store.channelTab = k;
+      tabBtns.forEach((b, i) => b.classList.toggle('active', Object.keys(TABS)[i] === k));
+      if (k === 'setup') {
+        clear(body, setupBody);
+        clear(foot, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.'));
+      } else if (k === 'rebuild') {
+        rebuildBody.refresh();
+        clear(body, h('div', { class: 'page-width' }, rebuildBody));
+        clear(foot, h('span', { class: 'dim small' }, 'Builds use the saved setup. Every apply is backed up first; undo it here or on History.'));
+      } else {
+        lineupBody = lineupTab(ch); // fresh each time: the lineup may have changed
+        clear(body, h('div', { class: 'page-width' }, lineupBody));
+        clear(foot, h('span', { class: 'dim small' }, 'What Tunarr is playing on this channel now.'));
+      }
+    }
+
     clear(detail,
       h('div', { class: 'panel-head' }, h('span', null, channelLabel(ch)),
         h('div', { class: 'btn-row' }, status,
           h('button', { class: 'btn small ghost', onclick: () => editBasics(ch) }, 'Edit'),
           h('button', { class: 'btn small ghost', onclick: () => editBasics(ch, true) }, 'Copy'),
-          h('button', { class: 'btn small ghost', onclick: () => removeChannel(ch) }, 'Delete'),
-          previewBtn)),
-      h('div', { class: 'panel-body' },
-        h('div', { class: 'page-width' }, lineupCard, poolCard, sortCard, settingsCard, autoCard)),
-      h('div', { class: 'panel-foot' }, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.')));
+          h('button', { class: 'btn small ghost', onclick: () => removeChannel(ch) }, 'Delete'))),
+      h('div', { class: 'tabs' }, tabBtns),
+      body, foot);
+    showTab(store.channelTab || 'setup');
 
-    // ---- lineup summary (from Tunarr) ----
-    loadChannelData(ch.id).then(d => {
-      const shows = new Set(d.pool.map(p => p.showTitle)).size;
-      const playing = d.current[d.playingIndex];
-      const playingItem = playing?.id ? d.byId.get(playing.id) : null;
-      clear(lineupCard, h('h3', null, 'On Tunarr now'),
-        h('div', { class: 'stat' }, h('span', null, 'Lineup'), h('span', { class: 'v' }, `${d.current.length} items · ${fmtDur(d.totalDurationMs)}`)),
-        h('div', { class: 'stat' }, h('span', null, 'Episode pool'), h('span', { class: 'v' }, `${d.pool.length} episodes · ${shows} show${shows === 1 ? '' : 's'}`)),
-        h('div', { class: 'stat' }, h('span', null, 'Lineup started'), h('span', { class: 'v' }, fmtWhen(d.startTime))),
-        playingItem ? h('div', { class: 'stat' }, h('span', null, 'Playing now'), h('span', { class: 'v' }, `${playingItem.showTitle} · ${playingItem.episodeLabel ? playingItem.episodeLabel + ' · ' : ''}${playingItem.title}`)) : null,
-        d.scheduleType ? h('p', { class: 'small warn-text', style: { marginTop: '10px' } },
-          `This lineup was generated in Tunarr by a "${d.scheduleType}" slot schedule. Applying from Schedule Lab replaces it with a fixed lineup; a backup is taken first so it can be restored.`) : null,
-      );
-    }).catch(err => clear(lineupCard, h('h3', null, 'On Tunarr now'), h('p', { class: 'err-text small' }, err.message)));
 
     // ---- sort & version ----
     async function drawSort() {
@@ -262,6 +277,16 @@ Library rules now live in automations.`,
     await drawSort();
   }
 
+
+  // ---------- quick rebuild ----------
+  async function rebuildNow(c) {
+    if (c.id === store.selectedChannelId && removeFlusher) await removeFlusher.flush();
+    const r = await quickRebuild(findChannel(c.id) || c);
+    if (!r) return;
+    await loadChannels(true);
+    drawList();
+    if (c.id === store.selectedChannelId && store.channelTab === 'lineup') drawDetail();
+  }
 
   // ---------- channel management ----------
   async function refreshChannels(selectId) {

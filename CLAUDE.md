@@ -35,7 +35,8 @@ Full plan: the "Schedule Lab 2.0 Plan" doc on claude.ai (see the owner's artifac
   1-2 at a time, spread across an overnight window.
 
 ## Tools (screens)
-Channels, Sort Builder, Sort Library, Preview & Compare, Apply & History, Watch Tracker,
+Channels (tabs: Setup, Rebuild, Lineup now; ↻ quick rebuild in the list), Channel Builder, Sort Builder,
+Sort Library, Compare, History, Watch Tracker,
 Automations, Settings (global settings and global variables).
 
 ## Releases
@@ -58,6 +59,9 @@ Automations, Settings (global settings and global variables).
     channel without sources turns its lineup shows into sources (sourcesFromItems); re-importing starters
     updates unedited ones as a new version (2.1.0-beta.9).
   - Pool card "+ From lineup" and ctx.pool.fromLineup() (addLineupToPool) (2.1.0-beta.10).
+  - Rebuild on the channel page (2.1.0-beta.11): Channels tabs Setup / Rebuild / Lineup now, ↻ quick rebuild
+    in the list, Compare applies directly, Apply & History became History (`#/apply` still works).
+    Shared UI in `public/js/components/rebuild.js` (applyPreviewTo, undoLast, guideCheckCard, rebuildTab).
   - 2.1.0 = the owner has tested all of 2.1 on the server.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via

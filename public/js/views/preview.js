@@ -1,10 +1,12 @@
-// Preview & Compare: run one or more library sorts on a channel, rank the
-// candidates with an editable scoring function, and inspect the timeline.
+// Compare: run one or more library sorts on a channel, rank the candidates
+// with an editable scoring function, inspect the timeline, and apply one.
+// (Everyday rebuilds happen on the channel's Rebuild tab.)
 import { api, busy, clear, fmtDur, fromLocalInput, h, nowMinute, toLocalInput, toast } from '../ui.js';
 import { channelLabel, currentItems, expandItems, findChannel, globalsMap, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { codeEditor } from '../components/code-editor.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
 import { makeHours } from '/shared/weekly-hours.js';
+import { applyPreviewTo } from '../components/rebuild.js';
 import { parseSettings, resolveValues } from '/shared/sort-settings.js';
 import { DEFAULT_SCORE_CODE } from '/shared/analysis.js';
 
@@ -35,7 +37,7 @@ export async function render(root, { params, go }) {
   const summary = h('span', { class: 'pill' });
   const tight = h('input', { type: 'number', min: 0, value: String(store.settings.thresholds.tight), style: { width: '70px' } });
   const loose = h('input', { type: 'number', min: 0, value: String(store.settings.thresholds.loose), style: { width: '70px' } });
-  const applyBtn = h('button', { class: 'btn primary', disabled: true }, 'Send to Apply');
+  const applyBtn = h('button', { class: 'btn danger', disabled: true }, 'Apply to channel');
   const viewBtns = { preview: 'Preview', current: 'Current lineup', ranking: 'Repeat ranking' };
   const viewEls = Object.entries(viewBtns).map(([k, label]) => h('button', { class: 'btn small', onclick: () => { state.view = k; drawRight(); } }, label));
   let scoreEditor = null;
@@ -44,7 +46,7 @@ export async function render(root, { params, go }) {
 
   clear(root, h('div', { class: 'screen three' },
     h('div', { class: 'panel' },
-      h('div', { class: 'panel-head' }, 'Preview & Compare'),
+      h('div', { class: 'panel-head' }, 'Compare'),
       h('div', { class: 'panel-body' },
         h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Channel'), channelSelect),
         h('div', { class: 'row' },
@@ -62,7 +64,7 @@ export async function render(root, { params, go }) {
           h('p', { class: 'dim small', style: { marginTop: '8px' } }, 'Ranks candidates when you compare more than one. Higher is better. Saved for next time.'),
           (scoreEditor = codeEditor({
             value: store.settings.scoreCode, minHeight: 240, onSave: () => saveScore(),
-            onChange: v => setUnsaved('scoring', v !== store.settings.scoreCode ? "Preview & Compare: the scoring function has changes that aren't saved." : null),
+            onChange: v => setUnsaved('scoring', v !== store.settings.scoreCode ? "Compare: the scoring function has changes that aren't saved." : null),
           })),
           h('div', { class: 'btn-row', style: { marginTop: '8px' } },
             h('button', { class: 'btn small', onclick: () => saveScore() }, 'Save scoring'),
@@ -203,7 +205,8 @@ export async function render(root, { params, go }) {
     const thresholds = store.settings.thresholds;
     const res = state.results;
     const cand = res?.candidates[state.selected];
-    applyBtn.disabled = !cand || !!cand.error || state.channelId === 'sample';
+    applyBtn.disabled = !cand || !!cand.error || !!cand.applied || state.channelId === 'sample';
+    applyBtn.textContent = cand?.applied ? 'Applied' : 'Apply to channel';
     if (!state.channelId) {
       clear(right, h('div', { class: 'empty' }, h('b', null, 'Pick a channel'), 'Choose a channel, tick the sorts to try, and click Run.'));
       summary.textContent = '';
@@ -236,12 +239,17 @@ export async function render(root, { params, go }) {
       : timeline({ items, startMs: cand.scheduleStartMs, thresholds, newAgainst: currentIds, away: away?.helper, watched }));
   }
 
-  applyBtn.onclick = () => {
+  applyBtn.onclick = () => busy(applyBtn, async () => {
     const cand = state.results?.candidates[state.selected];
-    if (!cand || cand.error) return;
-    store.lastPreview.set(state.channelId, { ...cand, createdAt: Date.now() });
-    go('apply', { channel: state.channelId });
-  };
+    const ch = findChannel(state.channelId);
+    if (!cand || cand.error || !ch) return;
+    const r = await applyPreviewTo(ch, cand);
+    if (!r) return;
+    cand.applied = true;
+    await loadChannels(true);
+    toast('Undo it, restore a backup or check the guide on History.', '', 8000);
+    drawRight();
+  });
 
   drawResults();
   await onChannel();

@@ -56,7 +56,7 @@ export async function render(root) {
       ],
     }),
     settingCard({
-      title: 'Preview & Compare',
+      title: 'Compare',
       note: 'Repeat colours on timelines are minutes between an episode\'s airings at the same time of day: red below the first number, green from the second.',
       keys: ['candidates', 'thresholds'],
       fields: (v) => [
@@ -76,7 +76,7 @@ export async function render(root) {
     }),
     h('div', { class: 'card' },
       h('div', { class: 'card-head' }, h('h3', null, 'Scoring function')),
-      h('p', { class: 'dim small' }, 'Ranks candidates on Preview & Compare, where you edit it.'),
+      h('p', { class: 'dim small' }, 'Ranks candidates on Compare (where you edit it), for "keep the best" on a channel\'s Rebuild tab, and for automations.'),
       h('button', { class: 'btn small', onclick: async () => {
         if (!(await confirmDialog({ title: 'Reset scoring', message: 'Replace your scoring function with the default one?', confirmLabel: 'Reset' }))) return;
         const r = await api('DELETE', '/api/settings/scoreCode');

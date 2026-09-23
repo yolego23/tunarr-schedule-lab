@@ -12,8 +12,7 @@ export const store = {
   globals: null,         // global variables
   fillerLists: null,
   channelData: new Map(), // channelId -> { pool, current, ... , byId }
-  /** Last preview per channel, so Apply & History can pick it up. */
-  lastPreview: new Map(), // channelId -> { previewId, label, items, durationMs, scheduleStartMs, createdAt }
+  channelTab: 'setup', // Channels screen: the tab last open
   /** Screen selections that should survive switching screens. */
   selectedChannelId: localStorage.getItem('lab.channel') || '',
 };
