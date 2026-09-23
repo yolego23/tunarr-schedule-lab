@@ -1,6 +1,6 @@
 // Settings: global settings, and global variables that every sort can read
 // (ctx.globals) and that channel settings can link to.
-import { api, busy, clear, confirmDialog, h, modal, toast } from '../ui.js';
+import { api, busy, clear, confirmDialog, fmtAgo, h, modal, toast } from '../ui.js';
 import { findChannel, loadChannels, loadGlobals, loadSettings, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { GLOBAL_NAME_RE, GLOBAL_TYPES, coerce } from '/shared/sort-settings.js';
@@ -12,10 +12,14 @@ export async function render(root) {
 
   const connection = h('div', { class: 'card' });
   const globalsCard = h('div', { class: 'card' });
+  const aiCard = h('div', { class: 'card' });
+  const aiUsageCard = h('div', { class: 'card' });
   clear(page,
     h('h2', null, 'Settings'),
     h('p', { class: 'dim' }, 'Global settings apply to the whole app. Global variables are shared values every sort can read, and any channel setting can link to.'),
     globalsCard,
+    aiCard,
+    aiUsageCard,
     settingCard({
       title: 'Watch Tracker',
       note: 'An episode counts as watched on a channel once it has streamed for the minimum minutes. Only the newest watches per episode per channel are kept; the watch count keeps counting. Set "forget after" to 0 to keep watches until newer ones replace them.',
@@ -69,6 +73,126 @@ export async function render(root) {
 
   drawGlobals();
   drawConnection();
+  drawAi().catch(err => clear(aiCard, h('p', { class: 'err-text small' }, err.message)));
+
+  // ---------- AI ----------
+  async function drawAi() {
+    const cfg = await api('GET', '/api/ai');
+    const unsavedKey = 'settings:ai';
+    const mark = () => setUnsaved(unsavedKey, "Settings: the AI settings have changes that aren't saved.");
+    const keyInput = p => h('input', {
+      type: 'password', autocomplete: 'off',
+      placeholder: cfg[p].apiKeySet ? `saved (${cfg[p].apiKeyHint}); type to replace` : 'not set',
+      oninput: mark,
+    });
+    const modelInput = (p, value, placeholder) => {
+      const list = h('datalist', { id: 'models-' + p });
+      const input = h('input', { type: 'text', value: value || '', list: 'models-' + p, placeholder, oninput: mark });
+      let loaded = false;
+      input.addEventListener('focus', async () => {
+        if (loaded) return;
+        loaded = true;
+        try { for (const m of await api('GET', '/api/ai/models/' + p)) list.append(h('option', { value: m })); }
+        catch (err) { loaded = false; toast(err.message, 'warn'); }
+      });
+      return [input, list];
+    };
+    const anthropicKey = keyInput('anthropic');
+    const openrouterKey = keyInput('openrouter');
+    const ollamaUrl = h('input', { type: 'text', value: cfg.ollama.baseUrl, placeholder: 'http://192.168.1.50:11434', oninput: mark });
+    const [anthropicModel, anthropicList] = modelInput('anthropic', cfg.anthropic.model, 'claude-opus-5');
+    const [openrouterModel, openrouterList] = modelInput('openrouter', cfg.openrouter.model, 'for example anthropic/claude-sonnet-5');
+    const [ollamaModel, ollamaList] = modelInput('ollama', cfg.ollama.model, 'for example llama3.2');
+    const NAMES = { anthropic: 'Anthropic', openrouter: 'OpenRouter', ollama: 'Ollama' };
+    const defaultSelect = h('select', { onchange: mark },
+      h('option', { value: '' }, '(none: AI off)'),
+      Object.keys(NAMES).map(p => h('option', { value: p, selected: cfg.defaultProvider === p }, NAMES[p])));
+    const allow = Object.fromEntries(['builder', 'sorts', 'automations'].map(k => [k, h('input', { type: 'checkbox', checked: cfg.allow[k], onchange: mark })]));
+    const cap = h('input', { type: 'number', min: 0, step: 1, value: String(cfg.monthlyCapUsd), oninput: mark });
+
+    const payload = () => {
+      const body = {
+        defaultProvider: defaultSelect.value,
+        anthropic: { model: anthropicModel.value.trim() },
+        openrouter: { model: openrouterModel.value.trim() },
+        ollama: { baseUrl: ollamaUrl.value.trim(), model: ollamaModel.value.trim() },
+        allow: { builder: allow.builder.checked, sorts: allow.sorts.checked, automations: allow.automations.checked },
+        monthlyCapUsd: Number(cap.value) || 0,
+      };
+      // Keys are only sent when typed; a blank box keeps the saved key.
+      if (anthropicKey.value.trim()) body.anthropic.apiKey = anthropicKey.value.trim();
+      if (openrouterKey.value.trim()) body.openrouter.apiKey = openrouterKey.value.trim();
+      return body;
+    };
+    const save = async () => {
+      await api('PUT', '/api/ai', payload());
+      setUnsaved(unsavedKey, null);
+    };
+    const saveBtn = h('button', { class: 'btn primary small' }, 'Save');
+    saveBtn.onclick = () => busy(saveBtn, async () => { await save(); toast('Saved the AI settings.', 'ok'); drawAi(); });
+
+    const testBtn = p => {
+      const b = h('button', { class: 'btn small' }, 'Test');
+      b.onclick = () => busy(b, async () => {
+        await save();
+        const r = await api('POST', '/api/ai/test/' + p);
+        if (r.ok) toast(NAMES[p] + ' answered "' + r.reply + '" using ' + r.model + ' in ' + (r.ms / 1000).toFixed(1) + ' s' + (r.costUsd ? ' ($' + r.costUsd.toFixed(4) + ')' : '') + '.', 'ok', 8000);
+        else toast(NAMES[p] + ': ' + r.error, 'err');
+        drawAi();
+      });
+      return b;
+    };
+    const removeKey = p => cfg[p].apiKeySet ? h('button', { class: 'btn small ghost', onclick: async () => {
+      if (!(await confirmDialog({ title: 'Remove API key', message: 'Remove the saved ' + NAMES[p] + ' API key?', confirmLabel: 'Remove', danger: true }))) return;
+      try { await api('PUT', '/api/ai', { [p]: { apiKey: '' }, ...(cfg.defaultProvider === p ? { defaultProvider: '' } : {}) }); drawAi(); }
+      catch (err) { toast(err.message, 'err'); }
+    } }, 'Remove key') : null;
+
+    const field = (label, ...input) => h('label', { class: 'field' }, h('span', { class: 'lab' }, label), ...input);
+    const provider = (p, note, fields) => h('div', { class: 'card flat', style: { marginBottom: '10px' } },
+      h('div', { class: 'card-head' },
+        h('b', null, NAMES[p], ' ', cfg.configured.includes(p) ? h('span', { class: 'pill ok' }, 'set up') : h('span', { class: 'pill' }, 'not set up')),
+        h('div', { class: 'btn-row' }, removeKey(p), testBtn(p))),
+      h('p', { class: 'dim small' }, note),
+      h('div', { class: 'row' }, fields));
+
+    clear(aiCard,
+      h('div', { class: 'card-head' }, h('h3', null, 'AI'), saveBtn),
+      h('p', { class: 'dim small' },
+        'Optional. Used only by "Ask AI" buttons and by sort or automation code that calls ', h('code', null, 'ctx.ai.ask()'),
+        ". With Anthropic or OpenRouter, prompts (which can include show titles) leave your network; with Ollama they stay on it. API keys are kept in Schedule Lab's database and in exports, and never shown again after saving."),
+      provider('anthropic', 'Claude models with your Anthropic API key.', [field('API key', anthropicKey), field('Model', anthropicModel, anthropicList)]),
+      provider('openrouter', 'Many models from different companies with one OpenRouter key; the cost of each call is reported.', [field('API key', openrouterKey), field('Model', openrouterModel, openrouterList)]),
+      provider('ollama', 'Local models on your network, with no key and no cost. Use an address the Schedule Lab server can reach (inside Docker, localhost is the container itself).', [field('Address', ollamaUrl), field('Model', ollamaModel, ollamaList)]),
+      h('div', { class: 'row' },
+        field('Default provider', defaultSelect, h('span', { class: 'hint' }, 'Code can still pick another provider that is set up.')),
+        field('Monthly spending cap (US $, 0 = none)', cap, h('span', { class: 'hint' }, 'Anthropic and OpenRouter. Spent this month: $' + cfg.spentThisMonthUsd.toFixed(2)))),
+      h('span', { class: 'lab' }, 'Allow AI in'),
+      h('div', { class: 'btn-row' },
+        h('label', { class: 'check' }, allow.builder, 'Channel Builder'),
+        h('label', { class: 'check' }, allow.sorts, 'Sorts'),
+        h('label', { class: 'check' }, allow.automations, 'Automations')));
+    drawAiUsage();
+  }
+
+  async function drawAiUsage() {
+    const rows = await api('GET', '/api/ai/usage?limit=25').catch(() => []);
+    const money = v => (v === null || v === undefined ? '?' : v === 0 ? 'free' : '$' + v.toFixed(4));
+    clear(aiUsageCard,
+      h('div', { class: 'card-head' }, h('h3', null, 'AI usage (latest 25 calls)')),
+      rows.length
+        ? h('div', { class: 'table-wrap' }, h('table', { class: 'grid' },
+            h('thead', null, h('tr', null, ['When', 'For', 'Provider · model', 'Tokens in / out', 'Cost', 'Result'].map(t => h('th', null, t)))),
+            h('tbody', null, rows.map(r => h('tr', null,
+              h('td', { class: 'small' }, fmtAgo(r.at)),
+              h('td', { class: 'small' }, r.feature, r.channelId ? h('span', { class: 'dim' }, ' · ' + (findChannel(r.channelId)?.name || r.channelId)) : ''),
+              h('td', { class: 'small mono' }, r.provider + ' · ' + r.model),
+              h('td', { class: 'small mono' }, r.inputTokens != null ? r.inputTokens + ' / ' + r.outputTokens : '—'),
+              h('td', { class: 'small mono' }, r.ok ? money(r.costUsd) : '—'),
+              h('td', { class: 'small' }, r.ok ? h('span', { class: 'ok-text' }, 'OK') : h('span', { class: 'err-text', title: r.error || '' }, (r.error || 'failed').slice(0, 90))))))))
+        : h('p', { class: 'dim small' }, 'No AI calls yet.'));
+  }
+
 
   // ---------- global settings cards ----------
   function settingCard({ title, note, key, keys, fields }) {

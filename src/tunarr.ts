@@ -95,14 +95,38 @@ export const tunarr = {
 
   /** Changes only the channel's start time (the moment its lineup's first item began). */
   async setStartTime(id: string, startTime: number): Promise<void> {
-    const ch = await tunarr.channel(id);
-    const body: Record<string, unknown> = {};
-    for (const key of CHANNEL_PUT_KEYS) if (ch[key] !== undefined) body[key] = ch[key];
-    body.startTime = Math.round(startTime);
-    await call<unknown>('PUT', `/api/channels/${encodeURIComponent(id)}`, body);
+    await tunarr.updateChannel(id, { startTime: Math.round(startTime) });
   },
 
+  /** Changes some of a channel's settings (name, number, group, start time…), keeping the rest. */
+  async updateChannel(id: string, changes: Record<string, unknown>): Promise<TunarrChannel> {
+    const ch = await tunarr.channel(id);
+    return call<TunarrChannel>('PUT', `/api/channels/${encodeURIComponent(id)}`, { ...channelBody(ch), ...changes, id });
+  },
+
+  createChannel: (channel: Record<string, unknown>) =>
+    call<TunarrChannel>('POST', '/api/channels', { type: 'new', channel: channelBody(channel) }),
+  /** Tunarr's own copy: settings and lineup. Returns the new channel. */
+  copyChannel: (channelId: string) => call<TunarrChannel>('POST', '/api/channels', { type: 'copy', channelId }),
+  deleteChannel: (id: string) => call<unknown>('DELETE', `/api/channels/${encodeURIComponent(id)}`),
+
+  transcodeConfigs: () => call<Array<{ id: string; name: string; isDefault?: boolean }>>('GET', '/api/transcode_configs'),
+
+  /** Tunarr's schedule for a channel between two times. */
+  guide: (id: string, from: number, to: number) =>
+    call<Array<{ index: number; startTimeMs: number; lineupItem: LineupItem }>>('GET',
+      `/api/guide/channels/${encodeURIComponent(id)}?dateFrom=${encodeURIComponent(new Date(from).toISOString())}&dateTo=${encodeURIComponent(new Date(to).toISOString())}`),
+  /** The XMLTV guide file TV apps download, and when Tunarr last built it. */
+  xmltv: () => call<string>('GET', '/api/xmltv.xml', undefined, 60_000),
+  xmltvLastRefresh: () => call<{ value: number }>('GET', '/api/xmltv-last-refresh'),
 };
+
+/** Only the properties the channel create/update schema accepts. */
+export function channelBody(ch: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  for (const key of CHANNEL_PUT_KEYS) if (ch[key] !== undefined) body[key] = ch[key];
+  return body;
+}
 
 // Properties the PUT /api/channels/{id} schema accepts (openapi.json, 1.3.15).
 const CHANNEL_PUT_KEYS = [

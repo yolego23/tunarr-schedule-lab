@@ -45,14 +45,14 @@ Automations, Settings (global settings and global variables).
   - Apply with backup first, undo/restore. Settings screen and global variables.
 - **2.1** (in progress, 2.1.0-beta.N):
   - Watch Tracker and `ctx.history` (done in 2.1.0-beta.1).
-  - Automations with staggered per-channel timetables.
-  - Check the guide after Apply (`/api/guide/channels/{id}`).
-  - Create, copy, rename, renumber and delete channels (`POST/PUT/DELETE /api/channels`).
+  - AI settings (Anthropic, OpenRouter, Ollama), channel management, guide check (done in 2.1.0-beta.2).
+  - Pool sources + library rules (beta.3), Channel Builder (beta.4), coded Automations + library (beta.5).
+  - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
+    `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
+    `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
 - **2.2**: filler and channel immersion: filler padding with `flex` lineup items, dynamic
   bumpers, and similar things that make a channel feel like real TV.
 - **2.3**:
-  - Library search for pools (`POST /api/programs/search`); custom shows and smart
-    collections as pools.
   - Checks across channels (`/api/channels/all/lineups`).
   - `append: true` applies; export as a Tunarr time-slot schedule.
 
@@ -81,6 +81,13 @@ Automations, Settings (global settings and global variables).
   default 5, per channel+episode) and `watch_totals` (running count, last watched). No device data
   is stored. Tunarr 1.3.15 has no viewing history of its own (checked all endpoints and logs).
   Sorts get it via `ctx.history` (`historyForSort`); Automations should use the same functions.
+- AI (`src/ai.ts`): providers anthropic (SDK) / openrouter / ollama (OpenAI-compatible fetch), config in
+  app_settings key `aiConfig` (keys never returned to the browser), `ai_usage` log + monthly cap. Sandbox
+  code reaches it only through a caller-supplied bridge (`runSort(..., { bridge })`): `ctx.ai.ask`,
+  legacy `ctx.utils.claude`. AI is never required (owner's rule).
+- Channel management (`src/channel-admin.ts`): create/copy/basics/delete; delete archives channel JSON +
+  lineup in `channel_archive`; recreate uses the same id. Guide check (`src/guide-check.ts`) compares
+  expectations saved on apply/restore with `/api/guide/channels/{id}` and the XMLTV file.
 
 ## Tunarr API notes (1.3.15)
 - Lineup write: `POST /api/channels/{id}/programming` with `{type:"manual", lineup:[...], append?}`.

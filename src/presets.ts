@@ -141,15 +141,16 @@ const aiOptimizer = `/* @settings
 candidateCount: number = 5         // Candidates to generate
 repeatWindowHours: number = 48     // Repeat window (hours)
 criteria: text = Maximize variety, avoid back-to-back episodes of the same show, prefer spreading shows evenly across the schedule.   // Scoring criteria
-apiKey: secret =                   // Anthropic API key (blank = local heuristic)
-model: text = claude-opus-5        // Claude model
+useAi: yes/no = yes                // Ask the AI from Settings → AI to pick (if it's set up)
+apiKey: secret =                   // Own Anthropic API key (optional; blank = Settings → AI)
+model: text = claude-opus-5        // Claude model (only with an own API key)
 */
 // Generates several candidate no-repeat shuffles, then either:
-//  - asks Claude to pick the best one (if an API key is set), or
+//  - asks the AI to pick the best one (its own API key, or Settings → AI), or
 //  - falls back to a local heuristic (fewest back-to-back repeats, most
 //    distinct shows).
-// The Claude call goes through ctx.utils.claude, which the server makes on
-// the sort's behalf; the key never leaves this app except to Anthropic.
+// The server makes the AI call on the sort's behalf and logs it under
+// Settings → AI usage.
 async function run(ctx){
   const { pool, params, targetMs, utils } = ctx;
   const n = Math.max(1, Number(params.candidateCount) || 5);
@@ -182,7 +183,8 @@ async function run(ctx){
   for (let s = 0; s < n; s++) candidates.push(shuffleOnce(1000 + s * 7919));
   const scored = candidates.map(list => ({ list, metrics: utils.scoreSchedule(list) }));
 
-  if (params.apiKey && params.apiKey.trim()) {
+  const ownKey = params.apiKey && params.apiKey.trim();
+  if (ownKey || (params.useAi && ctx.ai.available)) {
     const summary = scored.map((c, idx) =>
       \`Candidate \${idx}: maxConsecutiveSameShow=\${c.metrics.maxConsecutiveSameShow}, distinctShows=\${c.metrics.distinctShows}, sequence=\${c.list.slice(0,25).map(i=>i.showTitle).join(' > ')}\`
     ).join('\\n');
@@ -193,7 +195,9 @@ Criteria: \${params.criteria}
 
 Respond with ONLY a JSON object like {"index": 0} naming the best candidate index. No other text.\`;
     try {
-      const text = await utils.claude({ apiKey: params.apiKey, model: params.model, prompt, maxTokens: 2000 });
+      const text = ownKey
+        ? await utils.claude({ apiKey: params.apiKey, model: params.model, prompt, maxTokens: 2000 })
+        : await ctx.ai.ask({ prompt, maxTokens: 2000 });
       const match = text.match(/\\{[^}]*\\}/);
       const idx = match ? (JSON.parse(match[0]).index ?? 0) : 0;
       console.log('Claude picked candidate', idx);
@@ -357,7 +361,9 @@ seed: number = 1   // Random seed
 // ctx.scheduleStartMs  when the first item starts (epoch ms)
 // ctx.utils         shuffle(arr, rng), makeRng(seed), scoreSchedule(list),
 //                   hours(weeklyHours) -> { isInside(t), fractionInside(a, b) },
-//                   claude({ apiKey, prompt }) -> Promise<text>
+//                   claude({ apiKey, prompt }) -> Promise<text> (1.8 style)
+// ctx.ai            ask(prompt or { prompt, ... }) -> Promise<text>, using
+//                   Settings → AI; ctx.ai.available = set up and allowed
 // ctx.globals       global variables from the Settings screen, by name
 // ctx.history       from the Watch Tracker: lastWatched(id), watchCount(id),
 //                   watches(id) -> [{ at, minutes }]; add { anyChannel: true }

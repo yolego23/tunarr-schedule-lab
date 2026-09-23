@@ -78,6 +78,33 @@ for all channels, plus `lastAired(id)` from the channel's lineup. Preview
 timelines tag episodes already watched on the channel. The Watch Tracker
 screen shows what's streaming now and the log, where watches can be deleted.
 
+## AI (optional)
+
+Settings → AI sets up Anthropic (Claude), OpenRouter, and/or Ollama on your
+network, with a default provider, on/off switches for the Channel Builder,
+sorts and automations, and a monthly spending cap for the paid providers.
+Nothing uses AI unless you click an "Ask AI" button or your sort or automation
+code calls `ctx.ai.ask(...)`. Every call is logged with its tokens and cost
+under AI usage. API keys are never shown again after saving (they are kept in
+the database and in exports). With Anthropic or OpenRouter, prompts leave your
+network; with Ollama they stay on it. For Ollama in Docker, use the Ollama
+server's LAN address, not localhost.
+
+## Channels in Tunarr
+
+The Channels screen can create a new channel, copy one (Tunarr copies the
+settings and lineup; Schedule Lab copies the sort and its settings), rename,
+renumber, change the group, and delete. Deleting saves the channel's settings
+and lineup first; "Deleted channels" recreates it with the same id, so its
+Schedule Lab setup and watch history come back too.
+
+## Guide check
+
+Tunarr can't be told to rebuild its guide, so after every apply, undo or
+restore, Apply & History checks the next 6 hours: whether Tunarr's schedule
+matches what was applied, and whether the XMLTV guide file TV apps download
+has caught up. "Check guide" runs it again at any time.
+
 ## Global variables
 
 Named values on the Settings screen (number, text, secret, yes/no, weekly
@@ -144,9 +171,10 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.1): Watch Tracker and `ctx.history` (done);
-  Automations with per-channel timetables, a guide check after Apply, and
-  creating/copying/renaming/deleting channels are next.
+- **2.1** (now 2.1.0-beta.2): Watch Tracker and `ctx.history`, AI settings,
+  channel management and the guide check are done; pool sources and library
+  rules (beta.3), the Channel Builder (beta.4) and coded Automations (beta.5)
+  are next.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.
 - **2.3**: library search for pools, custom shows and smart collections as

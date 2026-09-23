@@ -6,6 +6,7 @@ import { forgetChannelData } from './channel-data.ts';
 import { getPreview } from './preview.ts';
 import { HttpError } from './sorts.ts';
 import { tunarr, toWritableLineupItem, type LineupItem } from './tunarr.ts';
+import { recordExpectation } from './guide-check.ts';
 
 // One change at a time per channel.
 const locks = new Map<string, Promise<unknown>>();
@@ -53,16 +54,23 @@ function log(entry: { channelId: string; channelName: string; action: string; de
 }
 
 /** Writes a lineup and sets the start time. Returns warnings for the non-fatal steps. */
-async function writeChannel(channelId: string, lineup: LineupItem[], startTime: number | null): Promise<string[]> {
+async function writeChannel(channelId: string, lineup: LineupItem[], startTime: number | null, label: string): Promise<string[]> {
   const warnings: string[] = [];
   await tunarr.writeLineup(channelId, lineup);
+  let aligned = false;
   if (startTime) {
     try {
       await tunarr.setStartTime(channelId, startTime);
+      aligned = true;
     } catch (err: any) {
       warnings.push(`The lineup was saved, but setting the channel's start time failed, so Tunarr may start the lineup at a different point: ${err.message}`);
     }
   }
+  // Remember what should air next, for the guide check.
+  try {
+    const start = aligned ? startTime! : Number((await tunarr.channel(channelId)).startTime);
+    recordExpectation(channelId, label, lineup, start);
+  } catch { /* the guide check falls back to the current lineup */ }
   forgetChannelData(channelId);
   return warnings;
 }
@@ -77,7 +85,7 @@ export async function applyPreview(channelId: string, previewId: string, alignSt
     const channelName = String(ch.name ?? '').trim();
     const backupId = await backupChannel(channelId, `Before applying ${preview.label}`);
     try {
-      const warnings = await writeChannel(channelId, preview.lineup, alignStart ? preview.scheduleStartMs : null);
+      const warnings = await writeChannel(channelId, preview.lineup, alignStart ? preview.scheduleStartMs : null, `the applied lineup (${preview.label})`);
       log({ channelId, channelName, action: 'apply', detail: preview.label, itemCount: preview.lineup.length, durationMs: preview.durationMs, backupId, ok: true, message: warnings.join(' ') });
       return { ok: true, backupId, warnings, itemCount: preview.lineup.length, durationMs: preview.durationMs };
     } catch (err: any) {
@@ -97,7 +105,7 @@ export async function restoreBackup(backupId: number, action: 'restore' | 'undo'
     const newBackupId = await backupChannel(b.channel_id, `Before ${action === 'undo' ? 'undo' : 'restoring the backup'} from ${when}`);
     const detail = `Backup from ${when} (${b.reason})`;
     try {
-      const warnings = await writeChannel(b.channel_id, lineup, b.start_time);
+      const warnings = await writeChannel(b.channel_id, lineup, b.start_time, `the restored lineup (backup #${b.id})`);
       log({ channelId: b.channel_id, channelName: b.channel_name, action, detail, itemCount: lineup.length, durationMs: b.duration_ms, backupId: newBackupId, ok: true, message: warnings.join(' ') });
       return { ok: true, backupId: newBackupId, warnings, itemCount: lineup.length, durationMs: b.duration_ms };
     } catch (err: any) {

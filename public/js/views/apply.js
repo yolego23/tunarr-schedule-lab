@@ -1,5 +1,5 @@
 // Apply & History: apply a preview (after a backup), undo, restore any of the
-// last 20 backups, and see what changed when.
+// last 20 backups, check the guide, and see what changed when.
 import { api, busy, clear, confirmDialog, download, fmtAgo, fmtDur, fmtWhen, h, slug, toast } from '../ui.js';
 import { channelLabel, findChannel, forgetChannelData, loadChannelData, loadChannels, loadSettings, selectChannel, store } from '../store.js';
 
@@ -11,6 +11,7 @@ export async function render(root, { params, go }) {
   const channelSelect = h('select', null, h('option', { value: '' }, '— pick a channel —'),
     store.channels.map(c => h('option', { value: c.id, selected: c.id === store.selectedChannelId }, channelLabel(c))));
   const readyCard = h('div', { class: 'card' });
+  const guideCard = h('div', { class: 'card' });
   const backupsBox = h('div');
   const historyBox = h('div');
   const allHistory = h('input', { type: 'checkbox' });
@@ -20,7 +21,8 @@ export async function render(root, { params, go }) {
       h('div', { class: 'panel-head' }, 'Apply'),
       h('div', { class: 'panel-body' },
         h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Channel'), channelSelect),
-        readyCard)),
+        readyCard,
+        guideCard)),
     h('div', { class: 'panel' },
       h('div', { class: 'panel-head' }, 'Backups & history'),
       h('div', { class: 'panel-body' },
@@ -104,6 +106,42 @@ export async function render(root, { params, go }) {
   function report(r, verb) {
     toast(`${verb}: ${r.itemCount} items, ${fmtDur(r.durationMs)}. Backup #${r.backupId} saved first.`, 'ok', 7000);
     for (const w of r.warnings || []) toast(w, 'warn', 12000);
+    // Check the guide once Tunarr has had a moment.
+    setTimeout(() => runGuideCheck(), 3000);
+  }
+
+  // ---------- guide check ----------
+  const guideResults = new Map(); // channelId -> result (kept while the screen is open)
+  async function runGuideCheck(button) {
+    const id = store.selectedChannelId;
+    if (!id) return;
+    const run = async () => {
+      drawGuide(true);
+      try { guideResults.set(id, await api('GET', `/api/channels/${encodeURIComponent(id)}/guide-check?hours=6`)); }
+      catch (err) { guideResults.set(id, { verdict: 'error', message: err.message }); }
+      drawGuide();
+    };
+    return button ? busy(button, run) : run();
+  }
+  function drawGuide(checking = false) {
+    const id = store.selectedChannelId;
+    if (!id) { clear(guideCard); return; }
+    const r = guideResults.get(id);
+    const btn = h('button', { class: 'btn small' }, 'Check guide');
+    btn.onclick = () => runGuideCheck(btn);
+    const pill = !r ? null
+      : h('span', { class: `pill ${r.verdict === 'ok' ? 'ok' : r.verdict === 'guide-behind' ? 'warn' : r.verdict === 'no-data' ? '' : 'err'}` },
+          { ok: 'guide matches', 'guide-behind': 'guide not updated yet', mismatch: 'schedule differs', 'no-data': 'nothing to compare', error: 'check failed' }[r.verdict] || r.verdict);
+    clear(guideCard,
+      h('div', { class: 'card-head' }, h('h3', null, 'Guide check'), h('div', { class: 'btn-row' }, pill, btn)),
+      checking ? h('p', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Checking the next 6 hours…')
+        : r ? h('div', null,
+            h('p', { class: 'small' }, r.message),
+            r.tunarr ? h('div', { class: 'stat' }, h('span', null, "Tunarr's schedule"), h('span', { class: 'v' }, `${r.tunarr.matched} of ${r.tunarr.total} airings match`)) : null,
+            r.xmltv ? h('div', { class: 'stat' }, h('span', null, 'TV guide file (XMLTV)'), h('span', { class: 'v' },
+              r.xmltv.found ? `${r.xmltv.matched} of ${r.xmltv.total} match${r.xmltv.builtAt ? ` · built ${fmtAgo(r.xmltv.builtAt)}` : ''}` : 'channel not in the file')) : null,
+            r.checkedAt ? h('p', { class: 'dim small', style: { marginTop: '6px' } }, `Checked ${fmtAgo(r.checkedAt)}. Tunarr rebuilds the guide file on its own schedule; it can't be triggered from the API.`) : null)
+        : h('p', { class: 'dim small' }, "Compares the next 6 hours of what was applied with Tunarr's schedule and with the guide file TV apps download."));
   }
 
   async function drawBackups() {
@@ -153,6 +191,7 @@ export async function render(root, { params, go }) {
   }
 
   function drawAll() {
+    drawGuide();
     drawReady().catch(err => toast(err.message, 'err'));
     drawBackups().catch(err => clear(backupsBox, h('p', { class: 'err-text small' }, err.message)));
     drawHistory().catch(err => clear(historyBox, h('p', { class: 'err-text small' }, err.message)));

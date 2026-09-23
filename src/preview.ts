@@ -4,7 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { getChannelData, lastAiredMap, type ChannelData } from './channel-data.ts';
 import { historyForSort } from './watch.ts';
 import { getSetup } from './channels.ts';
-import { runSort, SortError, type SortOutputItem } from './sandbox/index.ts';
+import { runSort, SortError, type BridgeHandler, type SortOutputItem } from './sandbox/index.ts';
+import { aiAvailable, aiConfig, ask } from './ai.ts';
 import { HttpError, getSort, getVersion } from './sorts.ts';
 import { toWritableLineupItem, type LineupItem } from './tunarr.ts';
 import { parseSettings, resolveValues } from './shared/sort-settings.js';
@@ -70,11 +71,33 @@ function sortInput(data: ChannelData, params: Record<string, unknown>, targetMs:
     scheduleStartMs,
     channel: { id: data.channelId, name: data.name, number: data.number },
     globals: globalsForSorts(),
+    aiAvailable: aiAvailable('sort'),
     history: { ...historyForSort(data.channelId, data.pool.map(p => p.id)), lastAired: lastAiredMap(data) },
   };
 }
 
 const timeLimitMs = () => appSetting('sortTimeLimitSec') * 1000;
+
+/** ctx.ai.ask and the older ctx.utils.claude, for sorts run on a channel. */
+function sortBridge(channelId: string): BridgeHandler {
+  return async (kind, p) => {
+    if (kind !== 'ai' && kind !== 'claude') throw new Error(`Unknown helper "${kind}"`);
+    const channel = channelId === 'sample' ? undefined : channelId;
+    if (kind === 'claude') {
+      // 1.8-style call: the sort's own key if it has one, else the Anthropic
+      // provider from Settings → AI, else whatever the default provider is.
+      const anthropicReady = !!aiConfig().anthropic.apiKey;
+      const useDefault = !p.apiKey && !anthropicReady;
+      const r = await ask({
+        prompt: p.prompt, system: p.system, maxTokens: p.maxTokens, feature: 'sort', channelId: channel,
+        apiKey: p.apiKey || undefined, provider: useDefault ? undefined : 'anthropic', model: useDefault ? undefined : p.model,
+      });
+      return r.text;
+    }
+    const r = await ask({ prompt: p.prompt, system: p.system, provider: p.provider, model: p.model, maxTokens: p.maxTokens, feature: 'sort', channelId: channel });
+    return r.text;
+  };
+}
 
 function checkTiming(targetHours: unknown, scheduleStartMs: unknown) {
   const hours = Number(targetHours);
@@ -133,7 +156,7 @@ export async function runPreview(req: RunRequest) {
 
 async function runOrExplain(code: string, input: ReturnType<typeof sortInput>, scoreCode?: string) {
   try {
-    return await runSort(code, input, scoreCode, timeLimitMs());
+    return await runSort(code, input, scoreCode, { timeLimitMs: timeLimitMs(), bridge: sortBridge(input.channel.id) });
   } catch (err) {
     if (err instanceof SortError) throw new HttpError(422, err.message);
     throw err;
@@ -205,7 +228,7 @@ export async function rankCandidates(req: RankRequest) {
       if (hasSeed) params.seed = (Number(r.params.seed) || 1) + i * 7919;
       const label = `${name} v${r.version}` + (hasSeed ? ` · seed ${params.seed}` : '');
       jobs.push(
-        runSort(r.code, sortInput(data, params, targetMs, start), req.scoreCode, timeLimitMs())
+        runSort(r.code, sortInput(data, params, targetMs, start), req.scoreCode, { timeLimitMs: timeLimitMs(), bridge: sortBridge(data.channelId) })
           .then(result => finishPreview(data, result, { label, sortId: Number(entry.sortId), sortVersion: r.version, start, targetMs }))
           .catch(err => ({ label, error: err instanceof Error ? err.message : String(err) })),
       );

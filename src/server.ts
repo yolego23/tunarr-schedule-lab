@@ -17,6 +17,9 @@ import { NEW_SORT_CODE } from './presets.ts';
 import { allSettings, resetAppSetting, saveAppSetting } from './app-settings.ts';
 import { deleteGlobal, listGlobals, saveGlobal } from './globals.ts';
 import { storageStatus } from './storage-check.ts';
+import { PROVIDERS, listModels, listUsage, publicAiConfig, saveAiConfig, testProvider, type Provider } from './ai.ts';
+import { copyChannel, createChannel, deleteChannel, listArchive, nextFreeNumber, recreateChannel, updateChannelBasics } from './channel-admin.ts';
+import { checkGuide } from './guide-check.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
@@ -69,6 +72,15 @@ route('GET', '/api/channels/:id/data', async ({ params, query }) => {
     scheduleType: (d.schedule as any)?.type ?? null,
   };
 });
+// Channel management (Tunarr channels themselves).
+route('POST', '/api/channels', ({ body }) => createChannel(body || {}));
+route('GET', '/api/channels/next-number', async () => ({ number: await nextFreeNumber(Math.max(0, ...(await tunarr.channels()).map(c => c.number))) }));
+route('GET', '/api/channels/archive', () => listArchive());
+route('POST', '/api/channels/archive/:archiveId/recreate', ({ params }) => recreateChannel(num(params.archiveId)));
+route('POST', '/api/channels/:id/copy', ({ params, body }) => copyChannel(params.id, body || {}));
+route('PUT', '/api/channels/:id/basics', ({ params, body }) => updateChannelBasics(params.id, body || {}));
+route('DELETE', '/api/channels/:id', ({ params }) => deleteChannel(params.id));
+route('GET', '/api/channels/:id/guide-check', ({ params, query }) => checkGuide(params.id, Math.min(Math.max(Number(query.get('hours')) || 6, 1), 48)));
 route('GET', '/api/channels/:id/setup', ({ params }) => getSetup(params.id));
 route('PUT', '/api/channels/:id/setup', ({ params, body }) => saveSetup(params.id, body || {}));
 route('GET', '/api/filler-lists', () => tunarr.fillerLists());
@@ -108,6 +120,21 @@ route('GET', '/api/watch/summary/:channelId', ({ params }) => channelWatchSummar
 route('DELETE', '/api/watch/:id', ({ params }) => ({ deleted: deleteWatches({ id: num(params.id) }) }));
 route('DELETE', '/api/watch', ({ query }) => ({ deleted: deleteWatches({ channelId: query.get('channelId') || undefined }) }));
 
+// ---------- AI ----------
+const providerParam = (p: string) => {
+  if (!PROVIDERS.includes(p as Provider)) throw new HttpError(404, `Unknown provider "${p}".`);
+  return p as Provider;
+};
+
+route('GET', '/api/ai', () => publicAiConfig());
+route('PUT', '/api/ai', ({ body }) => saveAiConfig(body || {}));
+route('POST', '/api/ai/test/:provider', async ({ params }) => {
+  try { return await testProvider(providerParam(params.provider)); }
+  catch (err: any) { if (err instanceof HttpError) throw err; return { ok: false, provider: params.provider, error: err.message }; }
+});
+route('GET', '/api/ai/models/:provider', ({ params }) => listModels(providerParam(params.provider)));
+route('GET', '/api/ai/usage', ({ query }) => listUsage(Number(query.get('limit')) || 100));
+
 // ---------- global settings ----------
 route('GET', '/api/settings', () => allSettings());
 route('PUT', '/api/settings/:key', ({ params, body }) => ({ value: saveAppSetting(params.key, body?.value) }));
@@ -129,6 +156,7 @@ route('GET', '/api/export', ({ query }) => {
     globalVars: db.prepare('SELECT * FROM global_vars').all(),
     watchEvents: db.prepare('SELECT * FROM watch_events').all(),
     watchTotals: db.prepare('SELECT * FROM watch_totals').all(),
+    channelArchive: db.prepare('SELECT * FROM channel_archive').all(),
     applyLog: db.prepare('SELECT * FROM apply_log').all(),
   };
   if (query.get('backups') === '1') data.backups = db.prepare('SELECT * FROM backups').all();
@@ -138,7 +166,7 @@ route('POST', '/api/import', ({ body }) => {
   if (body?.kind !== 'schedule-lab-export') throw new HttpError(400, 'This is not a Schedule Lab export file.');
   const tables: Array<[string, unknown]> = [
     ['app_settings', body.appSettings], ['sorts', body.sorts], ['sort_versions', body.sortVersions],
-    ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['watch_events', body.watchEvents], ['watch_totals', body.watchTotals], ['apply_log', body.applyLog], ['backups', body.backups],
+    ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['watch_events', body.watchEvents], ['watch_totals', body.watchTotals], ['channel_archive', body.channelArchive], ['apply_log', body.applyLog], ['backups', body.backups],
   ];
   const counts: Record<string, number> = {};
   transaction(() => {

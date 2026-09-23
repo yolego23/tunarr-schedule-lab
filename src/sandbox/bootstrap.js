@@ -57,6 +57,14 @@ async function __main() {
     hours: makeHours,
     claude: function (opts) { return __bridge('claude', opts || {}); },
   };
+  // The AI from Settings → AI (Anthropic, OpenRouter or Ollama), if set up and allowed.
+  var ai = {
+    available: !!input.aiAvailable,
+    ask: function (opts) {
+      if (typeof opts === 'string') opts = { prompt: opts };
+      return __bridge('ai', opts || {});
+    },
+  };
   // Watch Tracker data for this channel ({ anyChannel: true } = all channels).
   var H = input.history || { channel: {}, any: {}, lastAired: {} };
   function pickHistory(id, opts) { return (opts && opts.anyChannel ? H.any : H.channel)[id]; }
@@ -79,6 +87,7 @@ async function __main() {
     globals: Object.freeze(input.globals || {}),
     utils: utils,
     history: history,
+    ai: ai,
   };
 
   var result = await __run(ctx);

@@ -5,7 +5,6 @@ import { fork } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,7 +36,22 @@ export interface SortInput {
     any: Record<string, { total: number; last: number | null; watches: Array<{ at: number; minutes: number; channelId?: string }> }>;
     lastAired: Record<string, number>;
   };
+  /** Whether ctx.ai can be used (set up and allowed for sorts). */
+  aiAvailable?: boolean;
 }
+
+/**
+ * Handles helper calls from sort code (ctx.ai.ask, ctx.utils.claude). The
+ * caller supplies it, so this module stays free of settings and the database.
+ */
+export type BridgeHandler = (kind: string, payload: any) => Promise<string>;
+
+export interface RunOptions {
+  timeLimitMs?: number;
+  bridge?: BridgeHandler;
+}
+
+const noBridge: BridgeHandler = async kind => { throw new Error(`${kind === 'ai' || kind === 'claude' ? 'AI' : kind} isn't available here.`); };
 
 export type SortOutputItem = { id: string } | { type: 'flex'; durationMs: number } | { ci: number };
 
@@ -71,11 +85,12 @@ async function slot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export function runSort(code: string, input: SortInput, scoreCode?: string, timeLimitMs = config.sortTimeLimitMs): Promise<SortResult> {
-  return slot(() => runOnce(code, input, scoreCode, timeLimitMs));
+export function runSort(code: string, input: SortInput, scoreCode?: string, options: number | RunOptions = {}): Promise<SortResult> {
+  const opts: RunOptions = typeof options === 'number' ? { timeLimitMs: options } : options;
+  return slot(() => runOnce(code, input, scoreCode, opts.timeLimitMs ?? config.sortTimeLimitMs, opts.bridge ?? noBridge));
 }
 
-function runOnce(code: string, input: SortInput, scoreCode: string | undefined, timeLimitMs: number): Promise<SortResult> {
+function runOnce(code: string, input: SortInput, scoreCode: string | undefined, timeLimitMs: number, bridge: BridgeHandler): Promise<SortResult> {
   return new Promise((resolve, reject) => {
     const child = fork(RUNNER, [], {
       execArgv: ['--permission', '--max-old-space-size=512', '--disable-warning=ExperimentalWarning'],
@@ -126,7 +141,7 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
           break;
         case 'bridge': {
           bridgesOpen++;
-          handleBridge(msg.request)
+          handleBridge(bridge, msg.request)
             .then(value => ({ ok: true, value }), (err: any) => ({ ok: false, value: err?.message || String(err) }))
             .then(({ ok, value }) => {
               bridgesOpen--;
@@ -163,47 +178,7 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
 }
 
 // ---------- host-side helpers the sandbox may call ----------
-async function handleBridge(requestJson: string): Promise<string> {
+async function handleBridge(bridge: BridgeHandler, requestJson: string): Promise<string> {
   const req = JSON.parse(requestJson);
-  if (req.kind === 'claude') return askClaude(req.payload || {});
-  throw new Error(`Unknown helper "${req.kind}"`);
-}
-
-/**
- * ctx.utils.claude({ apiKey, prompt, system?, model?, maxTokens? }) -> text.
- * The API key comes from the sort's own settings.
- */
-async function askClaude(opts: { apiKey?: string; prompt?: string; system?: string; model?: string; maxTokens?: number }): Promise<string> {
-  const apiKey = String(opts.apiKey || '').trim();
-  if (!apiKey) throw new Error('ctx.utils.claude needs an apiKey.');
-  if (!opts.prompt) throw new Error('ctx.utils.claude needs a prompt.');
-  const model = String(opts.model || 'claude-opus-5');
-  const client = new Anthropic({ apiKey, timeout: 120_000, maxRetries: 2 });
-  const params: Record<string, unknown> = {
-    model,
-    max_tokens: Math.min(Math.max(Number(opts.maxTokens) || 16000, 256), 64000),
-    messages: [{ role: 'user', content: String(opts.prompt) }],
-  };
-  if (opts.system) params.system = String(opts.system);
-  // Opus 5 / Fable 5.1 can decline a request; let the API retry it on a
-  // suitable fallback model instead of failing the run.
-  const useFallbacks = /^claude-(opus-5|fable-5-1)$/.test(model);
-  if (useFallbacks) {
-    params.betas = ['server-side-fallback-2026-07-01'];
-    params.fallbacks = 'default';
-  }
-  try {
-    const response: any = useFallbacks
-      ? await client.beta.messages.create(params as any)
-      : await client.messages.create(params as any);
-    if (response.stop_reason === 'refusal') {
-      throw new Error(`Claude declined the request${response.stop_details?.explanation ? `: ${response.stop_details.explanation}` : ''}.`);
-    }
-    return (response.content || []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
-  } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) throw new Error('Claude API: the API key was rejected.');
-    if (err instanceof Anthropic.RateLimitError) throw new Error('Claude API: rate limited, try again shortly.');
-    if (err instanceof Anthropic.APIError) throw new Error(`Claude API error ${err.status ?? ''}: ${err.message}`);
-    throw err;
-  }
+  return bridge(String(req.kind), req.payload || {});
 }

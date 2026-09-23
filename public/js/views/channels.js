@@ -1,8 +1,8 @@
 // Channels: each channel's pool, its assigned library sort and version, its
 // own values for that sort's settings, and how long a lineup to build.
 // Changes save automatically.
-import { api, busy, clear, fmtDur, fmtWhen, h, toast } from '../ui.js';
-import { addFlusher, channelLabel, findSort, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
+import { api, busy, clear, confirmDialog, fmtAgo, fmtDur, fmtWhen, h, modal, toast } from '../ui.js';
+import { addFlusher, channelLabel, findSort, forgetChannelData, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
@@ -13,9 +13,12 @@ export async function render(root, { go }) {
   clear(root, h('div', { class: 'screen two' },
     h('div', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('span', null, 'Tunarr channels'),
-        h('button', { class: 'btn small ghost', onclick: e => busy(e.currentTarget, async () => { await loadChannels(true); drawList(); }) }, 'Reload')),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn small primary', onclick: () => editBasics(null) }, '+ New'),
+          h('button', { class: 'btn small ghost', onclick: e => busy(e.currentTarget, async () => { await loadChannels(true); drawList(); }) }, 'Reload'))),
       h('div', { style: { padding: '8px 10px', borderBottom: '1px solid var(--line)' } }, filter),
-      listBody),
+      listBody,
+      h('div', { class: 'panel-foot' }, h('button', { class: 'btn small ghost', onclick: () => showArchive() }, 'Deleted channels'))),
     detail));
 
   let channels = [];
@@ -111,7 +114,11 @@ export async function render(root, { go }) {
 
     clear(detail,
       h('div', { class: 'panel-head' }, h('span', null, channelLabel(ch)),
-        h('div', { class: 'btn-row' }, status, previewBtn)),
+        h('div', { class: 'btn-row' }, status,
+          h('button', { class: 'btn small ghost', onclick: () => editBasics(ch) }, 'Edit'),
+          h('button', { class: 'btn small ghost', onclick: () => editBasics(ch, true) }, 'Copy'),
+          h('button', { class: 'btn small ghost', onclick: () => removeChannel(ch) }, 'Delete'),
+          previewBtn)),
       h('div', { class: 'panel-body' },
         h('div', { class: 'page-width' }, lineupCard, sortCard, settingsCard)),
       h('div', { class: 'panel-foot' }, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.')));
@@ -208,6 +215,93 @@ export async function render(root, { go }) {
     }
 
     await drawSort();
+  }
+
+
+  // ---------- channel management ----------
+  async function refreshChannels(selectId) {
+    await loadChannels(true);
+    if (selectId !== undefined) selectChannel(selectId);
+    drawList();
+    await drawDetail();
+  }
+
+  /** New channel (ch = null), edit basics (ch), or copy (ch, copy = true). */
+  async function editBasics(ch, copy = false) {
+    const isNew = !ch;
+    const suggested = isNew || copy ? (await api('GET', '/api/channels/next-number').catch(() => ({ number: '' }))).number : ch.number;
+    const name = h('input', { type: 'text', value: isNew ? '' : copy ? ch.name + ' (copy)' : ch.name, placeholder: 'Saturday Morning Cartoons' });
+    const number = h('input', { type: 'number', min: 1, max: 9999, step: 1, value: String(suggested ?? '') });
+    const groups = [...new Set((store.channels || []).map(c => c.groupTitle).filter(Boolean))];
+    const group = h('input', { type: 'text', value: isNew ? (groups[0] || '') : ch.groupTitle || '', list: 'channel-groups' });
+    const title = isNew ? 'New channel' : copy ? 'Copy ' + ch.name : 'Edit ' + ch.name;
+    modal({
+      title,
+      body: h('div', null,
+        isNew ? h('p', { class: 'dim small' }, 'Creates an empty channel in Tunarr with its default settings. Then pick a sort here and preview and apply a lineup.') : null,
+        copy ? h('p', { class: 'dim small' }, "Tunarr copies the channel's settings and lineup. Its sort and setting values in Schedule Lab are copied too.") : null,
+        h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Name'), name),
+        h('div', { class: 'row' },
+          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Number'), number),
+          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Group'), group, h('datalist', { id: 'channel-groups' }, groups.map(g => h('option', { value: g })))))),
+      actions: [
+        { label: 'Cancel', kind: 'ghost' },
+        { label: isNew ? 'Create channel' : copy ? 'Copy channel' : 'Save', kind: 'primary', onClick: async () => {
+          const body = { name: name.value, number: number.value === '' ? undefined : Number(number.value), groupTitle: group.value };
+          try {
+            let result;
+            if (isNew) result = await api('POST', '/api/channels', body);
+            else if (copy) result = await api('POST', '/api/channels/' + encodeURIComponent(ch.id) + '/copy', body);
+            else result = await api('PUT', '/api/channels/' + encodeURIComponent(ch.id) + '/basics', body);
+            toast((isNew ? 'Created ' : copy ? 'Copied to ' : 'Saved ') + result.number + ' ' + String(result.name).trim() + '.', 'ok');
+            await refreshChannels(isNew || copy ? result.id : ch.id);
+            return true;
+          } catch (err) { toast(err.message, 'err'); return false; }
+        } },
+      ],
+    });
+    setTimeout(() => name.focus(), 0);
+  }
+
+  async function removeChannel(ch) {
+    const ok = await confirmDialog({
+      title: 'Delete channel',
+      message: 'Delete ' + ch.number + ' ' + ch.name + " from Tunarr?\n\nIts settings and lineup are saved first, so you can recreate it later from \"Deleted channels\" (with the same id, so its Schedule Lab setup and watch history come back too). TV apps will drop the channel until then.",
+      confirmLabel: 'Delete channel',
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api('DELETE', '/api/channels/' + encodeURIComponent(ch.id));
+      forgetChannelData(ch.id);
+      toast('Deleted ' + ch.name + '. It can be recreated from "Deleted channels".', 'ok', 8000);
+      await refreshChannels('');
+    } catch (err) { toast(err.message, 'err'); }
+  }
+
+  async function showArchive() {
+    const rows = await api('GET', '/api/channels/archive').catch(err => { toast(err.message, 'err'); return null; });
+    if (!rows) return;
+    const close = modal({
+      title: 'Deleted channels',
+      wide: true,
+      body: rows.length
+        ? h('table', { class: 'grid' },
+            h('thead', null, h('tr', null, ['Channel', 'Deleted', 'Lineup', ''].map(t => h('th', null, t)))),
+            h('tbody', null, rows.map(r => h('tr', null,
+              h('td', null, r.number + ' ' + r.name),
+              h('td', { class: 'small' }, fmtAgo(r.deletedAt)),
+              h('td', { class: 'small mono' }, r.itemCount + ' items'),
+              h('td', { class: 'actions' }, r.recreatedAt
+                ? h('span', { class: 'dim small' }, 'recreated ' + fmtAgo(r.recreatedAt))
+                : h('button', { class: 'btn small', onclick: e => busy(e.currentTarget, async () => {
+                  const back = await api('POST', '/api/channels/archive/' + r.id + '/recreate');
+                  toast('Recreated ' + back.number + ' ' + String(back.name).trim() + ' with ' + back.itemCount + ' items.', 'ok');
+                  close();
+                  await refreshChannels(back.id);
+                }) }, 'Recreate'))))))
+        : h('p', { class: 'dim' }, 'No channels have been deleted from Schedule Lab.'),
+    });
   }
 
   drawList();
