@@ -54,6 +54,9 @@ Automations, Settings (global settings and global variables).
     into the "Add new matching shows" automation (done in 2.1.0-beta.7).
   - Builder step 4 adds automations; smart collections and single episodes as pool sources; AI call
     count in run logs; fix for the Settings screen not loading in beta.7 (2.1.0-beta.8).
+  - Add new matching shows: skips shows already on the lineup (pool.get onChannel); the first add on a
+    channel without sources turns its lineup shows into sources (sourcesFromItems); re-importing starters
+    updates unedited ones as a new version (2.1.0-beta.9).
   - 2.1.0 = the owner has tested all of 2.1 on the server.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via

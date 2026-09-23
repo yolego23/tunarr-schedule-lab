@@ -104,7 +104,7 @@ export function runBody(run) {
     run.message ? h('p', { class: run.status === 'failed' ? 'err-text' : '', style: { whiteSpace: 'pre-wrap' } }, run.message) : null,
     run.changes?.length ? [h('h3', null, run.dryRun ? 'Would change' : 'Changes'),
       h('ul', null, run.changes.map(c => h('li', null, c.detail, c.backupId ? h('span', { class: 'dim small' }, ` (backup #${c.backupId})`) : null)))] : null,
-    run.logs?.length ? [h('h3', null, 'Log'), h('div', { class: 'log' }, run.logs.join('\n'))] : null,
+    run.logs?.length ? [h('h3', null, 'Log'), h('div', { class: 'log' }, run.logs.map(l => h('div', { class: 'line' + (/^error:/.test(l) ? ' err' : /^warn:/.test(l) ? ' warn' : '') }, l)))] : null,
     run.result !== null && run.result !== undefined ? [h('h3', null, 'Returned'), h('pre', { class: 'code-view' }, JSON.stringify(run.result, null, 2))] : null);
 }
 
@@ -242,7 +242,7 @@ export function automationsCard({ channel, go, onPoolChanged }) {
         h('td', { class: 'actions' },
           h('button', { class: 'btn small primary', onclick: e => busy(e.currentTarget, async () => {
             const r = await api('POST', `/api/suggestions/${s.id}/approve`);
-            toast(`Added ${s.source.label} to the pool.`, 'ok');
+            toast(`Added ${s.source.label} to the pool.${r.converted ? ` The ${r.converted} shows on the lineup became pool sources first, so they stay.` : ''}`, 'ok', 9000);
             onPoolChanged?.(r.pool);
             draw();
           }) }, 'Add'),

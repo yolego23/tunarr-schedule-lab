@@ -152,7 +152,10 @@ Rules every automation follows, whatever its code says:
 Each run's result, changes and log are in the run history. If Tunarr can't be
 reached, the run is tried again later (as long as it hadn't changed anything).
 Pool suggestions from automations show on the channel's card with **Add** and
-**Dismiss**; a dismissed show isn't suggested again.
+**Dismiss**; a dismissed show isn't suggested again. Shows already on the channel (in its pool
+sources or on its lineup) are never suggested. On a channel without pool
+sources, adding a show first turns the shows on its lineup into sources, so
+they stay.
 
 ```js
 /* @settings
@@ -272,7 +275,7 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.8): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.9): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources, the Channel Builder and
   coded Automations with their library are done; library rules moved into
   automations.

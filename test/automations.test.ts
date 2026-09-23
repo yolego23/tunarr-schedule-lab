@@ -150,7 +150,7 @@ test('add new matching shows: suggests what the channel lacks; approving adds it
   const sugg = auto.listSuggestions('c2');
   assert.equal(sugg.length, 1);
   assert.equal(sugg[0].ref, 'show2');
-  auto.decideSuggestion(sugg[0].id, true);
+  await auto.decideSuggestion(sugg[0].id, true);
   assert.deepEqual(channelsMod.getSetup('c2').pool.sources.map(s => s.ref), ['show1', 'show2']);
   r = await waitFor(auto.runNow(asg.id).id);
   assert.equal(r.status, 'skipped', 'nothing new the second time');
@@ -184,4 +184,26 @@ test('a smart collection source reads what its saved search matches', async () =
   const r = await resolvePool({ sources: [{ id: 's', kind: 'smart_collection', ref: 'sc1', label: 'Toons', weight: 1 }], exclusions: [] });
   assert.equal(r.items.length, 6);
   assert.deepEqual(r.sources[0].matches!.map(m => m.title), ['Show One', 'Show Two']);
+});
+
+test('a channel without pool sources: lineup shows count as on the channel, and they stay when a show is added', async () => {
+  for (const id of ['c3', 'c4']) {
+    channels.set(id, { id, number: 3, name: `Channel ${id}`, startTime: Date.now(), duration: 0 });
+    lineups.set(id, episodes.show1.map(e => ({ type: 'content', id: e.id, duration: e.duration })));
+  }
+  const code = presets.PRESET_AUTOMATIONS.find(p => p.name === 'Add new matching shows')!.code;
+  let r = await auto.testCode({ code, channelId: 'c3', values: { networks: 'Cartoon Network', mode: 'add' } });
+  assert.deepEqual(r.changes.map((c: any) => c.detail), [
+    'Would turn the 1 shows on the lineup into pool sources first, so they stay',
+    'Would add Show Two (2001)',
+  ], 'Show One is on the lineup, so only Show Two is new');
+
+  const a = auto.createAutomation({ name: 'Matching (c4)', code });
+  const asg = auto.createAssignment('c4', { automationId: a.id, values: { networks: 'Cartoon Network' }, timetable: { kind: 'manual' } });
+  r = await waitFor(auto.runNow(asg.id).id);
+  const sugg = auto.listSuggestions('c4');
+  assert.deepEqual(sugg.map(s => s.ref), ['show2']);
+  const approved = await auto.decideSuggestion(sugg[0].id, true);
+  assert.equal(approved.converted, 1);
+  assert.deepEqual(channelsMod.getSetup('c4').pool.sources.map(s => s.ref), ['show1', 'show2'], 'the lineup show stayed');
 });

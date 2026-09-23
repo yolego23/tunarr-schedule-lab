@@ -232,6 +232,25 @@ async function smartCollectionMatches(id: string): Promise<LibraryHit[]> {
   return out;
 }
 
+/**
+ * Pool sources that stand for a set of episodes (e.g. what's on a lineup now):
+ * whole shows, custom shows, movies, and single episodes for anything else.
+ */
+export function sourcesFromItems(items: PoolItem[]): PoolSource[] {
+  const sources: PoolSource[] = [];
+  const seen = new Set<string>();
+  for (const p of items) {
+    const key = p.customShowId ? 'c' + p.customShowId : p.showId ? 's' + p.showId : 'i' + p.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (p.customShowId) sources.push({ id: 'src-c-' + p.customShowId, kind: 'custom_show', ref: p.customShowId, label: `Custom show (${p.showTitle})`, weight: 1 });
+    else if (p.showId) sources.push({ id: 'src-s-' + p.showId, kind: 'show', ref: p.showId, label: p.showTitle, weight: 1 });
+    else if (p.programType === 'movie') sources.push({ id: 'src-m-' + p.id, kind: 'movie', ref: p.id, label: p.title + (p.year ? ` (${p.year})` : ''), weight: 1 });
+    else sources.push({ id: 'src-e-' + p.id, kind: 'episode', ref: p.id, label: `${p.showTitle} · ${p.title}`, weight: 1 });
+  }
+  return sources;
+}
+
 export interface ResolvedPool {
   items: Array<PoolItem & { weight: number; sources: string[] }>;
   sources: Array<{ id: string; label: string; kind: SourceKind; shows: number; episodes: number; durationMs: number; matches?: LibraryHit[]; error?: string }>;

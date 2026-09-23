@@ -57,7 +57,8 @@ export async function render(root, { params, go }) {
       h('button', { class: 'btn small primary', onclick: () => go('automations', { edit: 'new' }) }, '+ New automation'),
       h('button', { class: 'btn small', onclick: e => busy(e.currentTarget, async () => {
         const r = await api('POST', '/api/automations/import-presets');
-        toast(r.added.length ? `Imported ${r.added.join(', ')}.` : 'The starter automations are already in the library (by name).', r.added.length ? 'ok' : 'warn', 8000);
+        const parts = [r.added.length ? `Imported ${r.added.join(', ')}.` : '', r.updated.length ? `New version of ${r.updated.join(', ')} (channels move up to it under their Settings).` : ''].filter(Boolean);
+        toast(parts.length ? parts.join(' ') : 'The starter automations are already in the library and up to date.', parts.length ? 'ok' : 'warn', 9000);
         drawLibrary();
       }) }, 'Import starter automations'),
       h('button', { class: 'btn small', onclick: async () => {

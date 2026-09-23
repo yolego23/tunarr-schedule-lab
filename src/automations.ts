@@ -17,7 +17,7 @@ import { historyForSort } from './watch.ts';
 import { getPreview, runPreview } from './preview.ts';
 import { applyPreview } from './apply.ts';
 import { aiAvailable, ask } from './ai.ts';
-import { cleanPool, cleanRule, ruleMatches, type PoolSource } from './pool.ts';
+import { cleanPool, cleanRule, ruleMatches, sourcesFromItems, type PoolDefinition, type PoolSource } from './pool.ts';
 import { runAutomation, SortError, type BridgeHandler } from './sandbox/index.ts';
 import { PRESET_AUTOMATIONS } from './automation-presets.ts';
 
@@ -194,12 +194,23 @@ export function deleteAutomation(id: number) {
 export function importPresetAutomations() {
   const added: string[] = [];
   const skipped: string[] = [];
+  const updated: string[] = [];
   for (const p of PRESET_AUTOMATIONS) {
-    if (db.prepare('SELECT 1 FROM automations WHERE lower(name) = lower(?)').get(p.name)) { skipped.push(p.name); continue; }
+    const have = db.prepare('SELECT id, latest_version FROM automations WHERE lower(name) = lower(?)').get(p.name) as { id: number; latest_version: number } | undefined;
+    if (have) {
+      // A starter nobody has edited gets the newer starter code as a new version.
+      const versions = db.prepare('SELECT code, note FROM automation_versions WHERE automation_id = ?').all(have.id) as Array<{ code: string; note: string }>;
+      const untouched = versions.every(v => /^(Starter automation|Updated starter automation)$/.test(v.note));
+      if (untouched && getAutomationVersion(have.id, have.latest_version).code !== p.code) {
+        saveAutomationVersion(have.id, { code: p.code, note: 'Updated starter automation' });
+        updated.push(p.name);
+      } else skipped.push(p.name);
+      continue;
+    }
     createAutomation({ ...p, note: 'Starter automation' });
     added.push(p.name);
   }
-  return { added, skipped };
+  return { added, skipped, updated };
 }
 
 export function exportAutomation(id: number) {
@@ -527,6 +538,7 @@ interface RunState {
   builds: number;
   aiCalls: number;
   poolChanges: number;
+  convertedLineup?: boolean;
 }
 
 function showTitleOf(data: ChannelData) {
@@ -544,6 +556,32 @@ function checkSource(s: any): Omit<PoolSource, 'id'> & { ref: string } {
   if (!s.ref || typeof s.ref !== 'string') throw new Error('The source needs ref: the Tunarr id of the show, season, movie, episode or custom show.');
   const weight = s.weight === undefined ? 1 : Number(s.weight);
   return { kind: s.kind, ref: s.ref, label: String(s.label || s.ref).slice(0, 200), weight };
+}
+
+/** Ids of everything on the channel now: its shows, custom shows, movies and episodes (from pool sources or the lineup). */
+async function onChannel(channelId: string): Promise<Set<string>> {
+  const data = await getChannelData(channelId);
+  const ids = new Set<string>();
+  for (const p of [...data.pool, ...data.lineupItems]) {
+    ids.add(p.id);
+    if (p.showId) ids.add(p.showId);
+    if (p.seasonId) ids.add(p.seasonId);
+    if (p.customShowId) ids.add(p.customShowId);
+  }
+  for (const s of getSetup(channelId).pool.sources) if (s.ref) ids.add(s.ref);
+  return ids;
+}
+
+/**
+ * The pool to add a source to. A channel without pool sources plays what's on
+ * its lineup, so its shows become sources first; otherwise the first added
+ * source would replace them all.
+ */
+async function poolForAdding(channelId: string): Promise<{ pool: PoolDefinition; converted: number }> {
+  const pool = getSetup(channelId).pool;
+  if (pool.sources.length) return { pool, converted: 0 };
+  const sources = sourcesFromItems((await getChannelData(channelId)).pool);
+  return { pool: { ...pool, sources }, converted: sources.length };
 }
 
 function makeBridge(st: RunState): BridgeHandler {
@@ -657,13 +695,18 @@ function makeBridge(st: RunState): BridgeHandler {
       case 'pool.get': {
         const pool = getSetup(channelId).pool;
         const suggestions = db.prepare('SELECT ref, status FROM pool_suggestions WHERE channel_id = ?').all(channelId);
-        return json({ ...pool, suggestions });
+        // onChannel: ids of the shows, seasons, custom shows, movies and episodes the channel has now.
+        return json({ ...pool, suggestions, onChannel: [...await onChannel(channelId)] });
       }
       case 'pool.add': {
         const src = checkSource(p.source);
-        const pool = getSetup(channelId).pool;
-        if (pool.sources.some(s => s.ref === src.ref)) return json({ added: false, reason: 'already in the pool' });
+        if ((await onChannel(channelId)).has(src.ref)) return json({ added: false, reason: 'already on the channel' });
         poolChange();
+        const { pool, converted } = await poolForAdding(channelId);
+        if (converted && !st.convertedLineup) {
+          st.convertedLineup = true;
+          change({ kind: 'pool.add', detail: `${st.dryRun ? 'Would turn' : 'Turned'} the ${converted} shows on the lineup into pool sources first, so they stay` });
+        }
         change({ kind: 'pool.add', detail: `${st.dryRun ? 'Would add' : 'Added'} ${src.label}` });
         if (st.dryRun) return json({ added: true, dryRun: true });
         saveSetup(channelId, { pool: cleanPool({ ...pool, sources: [...pool.sources, src] }) });
@@ -672,7 +715,7 @@ function makeBridge(st: RunState): BridgeHandler {
       }
       case 'pool.suggest': {
         const src = checkSource(p.source);
-        if (getSetup(channelId).pool.sources.some(s => s.ref === src.ref)) return json({ suggested: false, reason: 'already in the pool' });
+        if ((await onChannel(channelId)).has(src.ref)) return json({ suggested: false, reason: 'already on the channel' });
         const had = db.prepare('SELECT status FROM pool_suggestions WHERE channel_id = ? AND ref = ?').get(channelId, src.ref) as { status: string } | undefined;
         if (had) return json({ suggested: false, reason: `already suggested (${had.status})` });
         poolChange();
@@ -855,15 +898,17 @@ export function listSuggestions(channelId: string, status = 'open') {
     .map(r => ({ id: r.id, ref: r.ref, source: JSON.parse(r.source_json), reason: r.reason, automationName: r.automation_name, runId: r.run_id, createdAt: r.created_at, status: r.status }));
 }
 
-export function decideSuggestion(id: number, approve: boolean) {
+export async function decideSuggestion(id: number, approve: boolean) {
   const r = db.prepare('SELECT * FROM pool_suggestions WHERE id = ?').get(id) as any;
   if (!r) throw new HttpError(404, 'That suggestion no longer exists.');
-  if (approve) {
-    const pool = getSetup(r.channel_id).pool;
-    if (!pool.sources.some(s => s.ref === r.ref)) saveSetup(r.channel_id, { pool: cleanPool({ ...pool, sources: [...pool.sources, JSON.parse(r.source_json)] }) });
+  let converted = 0;
+  if (approve && !getSetup(r.channel_id).pool.sources.some(s => s.ref === r.ref)) {
+    const got = await poolForAdding(r.channel_id);
+    converted = got.converted;
+    saveSetup(r.channel_id, { pool: cleanPool({ ...got.pool, sources: [...got.pool.sources, JSON.parse(r.source_json)] }) });
   }
   db.prepare('UPDATE pool_suggestions SET status = ?, decided_at = ? WHERE id = ?').run(approve ? 'approved' : 'dismissed', Date.now(), id);
-  return { ok: true, pool: getSetup(r.channel_id).pool };
+  return { ok: true, converted, pool: getSetup(r.channel_id).pool };
 }
 
 // ---------- turning a library rule into picked shows + an automation ----------

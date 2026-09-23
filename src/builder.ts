@@ -9,7 +9,7 @@ import { getSetup, saveSetup } from './channels.ts';
 import { applyPreview } from './apply.ts';
 import { cleanTimetable, createAssignment, getAutomation, listAssignments } from './automations.ts';
 import { aiAvailable, ask } from './ai.ts';
-import { cleanPool, type PoolDefinition, type PoolSource } from './pool.ts';
+import { cleanPool, sourcesFromItems, type PoolDefinition } from './pool.ts';
 import { parseSettings } from './shared/sort-settings.js';
 
 const STREAM_MODES = ['hls', 'hls_slower', 'mpegts', 'hls_direct', 'hls_direct_v2'];
@@ -73,24 +73,7 @@ export async function prefillFrom(channelId: string) {
   const [ch, data] = await Promise.all([tunarr.channel(channelId), getChannelData(channelId)]);
   const setup = getSetup(channelId);
   let pool: PoolDefinition = setup.pool;
-  if (!pool.sources.length) {
-    const sources: PoolSource[] = [];
-    const seen = new Set<string>();
-    for (const p of data.pool) {
-      if (p.customShowId) {
-        if (seen.has('c' + p.customShowId)) continue;
-        seen.add('c' + p.customShowId);
-        sources.push({ id: 'src-c-' + p.customShowId, kind: 'custom_show', ref: p.customShowId, label: `Custom show (${p.showTitle})`, weight: 1 });
-      } else if (p.showId) {
-        if (seen.has(p.showId)) continue;
-        seen.add(p.showId);
-        sources.push({ id: 'src-s-' + p.showId, kind: 'show', ref: p.showId, label: p.showTitle, weight: 1 });
-      } else if (p.programType === 'movie') {
-        sources.push({ id: 'src-m-' + p.id, kind: 'movie', ref: p.id, label: p.title + (p.year ? ` (${p.year})` : ''), weight: 1 });
-      }
-    }
-    pool = { sources, exclusions: [] };
-  }
+  if (!pool.sources.length) pool = { sources: sourcesFromItems(data.pool), exclusions: [] };
   const icon = (ch.icon || {}) as Record<string, any>;
   const wm = (ch.watermark || {}) as Record<string, any>;
   return {

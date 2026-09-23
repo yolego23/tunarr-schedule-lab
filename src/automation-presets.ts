@@ -113,7 +113,7 @@ async function run(ctx){
   if (ctx.params.yearTo) rule.yearTo = ctx.params.yearTo;
   if (!rule.networks.length && !rule.genres.length) return ctx.skip('Set networks or genres in this automation\\'s settings.');
   const pool = await ctx.pool.get();
-  const have = new Set(pool.sources.map(s => s.ref));
+  const have = new Set([...pool.sources.map(s => s.ref), ...(pool.onChannel || [])]);
   const excluded = new Set(pool.exclusions.map(e => e.id));
   const found = await ctx.library.search(rule);
   const fresh = found.filter(s => !have.has(s.id) && !excluded.has(s.id));
@@ -129,8 +129,9 @@ async function run(ctx){
       reason = v.reason || reason;
     }
     const source = { kind: show.type === 'movie' ? 'movie' : 'show', ref: show.id, label: show.title + (show.year ? \` (\${show.year})\` : '') };
-    if (ctx.params.mode === 'add') { await ctx.pool.add(source); ctx.log('Added ' + source.label); }
-    else { await ctx.pool.suggest(source, reason); ctx.log('Suggested ' + source.label); }
+    const r = ctx.params.mode === 'add' ? await ctx.pool.add(source) : await ctx.pool.suggest(source, reason);
+    const done = r.added || r.suggested;
+    ctx.log(done ? (ctx.params.mode === 'add' ? 'Added ' : 'Suggested ') + source.label : 'Skipped ' + source.label + ': ' + r.reason);
   }
 }
 `;
@@ -162,7 +163,9 @@ minLengthPercent: number = 50      // Refuse a lineup shorter than this % of the
 // ctx.log(...)           written to the run history
 // ctx.ai.available / await ctx.ai.ask(prompt)   Settings → AI, if allowed for automations
 // await ctx.library.search(rule)   shows/movies matching { networks, genres, ratings, yearFrom, yearTo, addedWithinDays, text }
-// await ctx.pool.get() / add(source) / suggest(source, reason) / exclude(item)
+// await ctx.pool.get()  { sources, exclusions, suggestions, onChannel: ids of shows etc. on the channel now }
+// await ctx.pool.add(source) / suggest(source, reason) / exclude(item)   (a channel without sources keeps
+//                        its lineup's shows: they become sources before the first add)
 // await ctx.channels.list() / get(id)   read-only view of every channel
 async function run(ctx){
   const now = await ctx.lineup.current();
