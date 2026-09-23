@@ -45,8 +45,12 @@ async function __main() {
   input.pool.forEach(function (p) { byId.set(p.id, p); });
   // Lineup entries that are pool episodes are the same objects as in the pool.
   // Anything else (flex, redirect, filler) keeps its place via __ci.
+  var lineupById = new Map();
+  (input.lineupItems || []).forEach(function (p) { lineupById.set(p.id, p); });
   var current = input.current.map(function (c, i) {
     if (c.id !== undefined && byId.has(c.id)) return byId.get(c.id);
+    // On the lineup but not in the pool: keeps its place in the lineup if returned.
+    if (c.id !== undefined && lineupById.has(c.id)) return Object.assign({}, lineupById.get(c.id), { durationMs: c.durationMs, __ci: i });
     return { id: c.id, type: c.type, durationMs: c.durationMs, title: '(' + c.type + ')', showTitle: '(' + c.type + ')', episodeLabel: null, __ci: i };
   });
 

@@ -4,6 +4,7 @@
 import { api, busy, clear, confirmDialog, fmtAgo, fmtDur, fmtWhen, h, modal, toast } from '../ui.js';
 import { addFlusher, channelLabel, findSort, forgetChannelData, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
+import { poolEditor } from '../components/pool-editor.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
 export async function render(root, { go }) {
@@ -64,7 +65,7 @@ export async function render(root, { go }) {
     const url = `/api/channels/${encodeURIComponent(ch.id)}/setup`;
     const unsavedKey = `channel:${ch.id}`;
     const status = h('span', { class: 'pill ok' }, 'All changes saved');
-    const payload = () => ({ sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart });
+    const payload = () => ({ sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart, pool: setup.pool });
     let timer = null, pending = false, inFlight = null;
     const setStatus = (kind, text) => { status.className = `pill ${kind}`; status.textContent = text; status.title = text; };
     const markDirty = () => {
@@ -83,6 +84,7 @@ export async function render(root, { go }) {
       pending = false;
       inFlight = api('PUT', url, payload()).then(saved => {
         ch.setup = saved;
+        forgetChannelData(ch.id); // the pool may have changed
         ch.sortName = saved.sortId ? findSort(saved.sortId)?.name ?? null : null;
         ch.latestVersion = saved.sortId ? findSort(saved.sortId)?.latest_version ?? null : null;
         previewBtn.disabled = !saved.sortId;
@@ -110,6 +112,8 @@ export async function render(root, { go }) {
     const previewBtn = h('button', { class: 'btn small', onclick: () => { flush(); go('preview', { channel: ch.id, run: '1' }); }, disabled: !setup.sortId, title: 'Assign a sort first to preview' }, 'Preview this channel');
     const lineupCard = h('div', { class: 'card' }, h('h3', null, 'On Tunarr now'), h('div', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
     const sortCard = h('div', { class: 'card' });
+    if (!setup.pool) setup.pool = { sources: [], exclusions: [] };
+    const poolCard = h('div', { class: 'card' }, poolEditor({ pool: setup.pool, lineupEpisodes: ch.programCount ?? '?', onChange: () => markDirty() }));
     const settingsCard = h('div', { class: 'card' });
 
     clear(detail,
@@ -120,7 +124,7 @@ export async function render(root, { go }) {
           h('button', { class: 'btn small ghost', onclick: () => removeChannel(ch) }, 'Delete'),
           previewBtn)),
       h('div', { class: 'panel-body' },
-        h('div', { class: 'page-width' }, lineupCard, sortCard, settingsCard)),
+        h('div', { class: 'page-width' }, lineupCard, poolCard, sortCard, settingsCard)),
       h('div', { class: 'panel-foot' }, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.')));
 
     // ---- lineup summary (from Tunarr) ----

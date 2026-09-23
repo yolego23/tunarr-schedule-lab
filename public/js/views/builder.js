@@ -301,7 +301,7 @@ padWith: filler list =                            // Filler list
       h('p', null, 'Types: number, text, secret, yes/no, choice(...), weekly hours, filler list.'),
       h('h3', null, 'ctx'),
       h('div', { class: 'kv' },
-        h('span', { class: 'k' }, 'pool'), h('span', null, 'Episodes: { id, title, showTitle, seasonNumber, episodeNumber, episodeLabel, durationMs }'),
+        h('span', { class: 'k' }, 'pool'), h('span', null, 'Episodes: { id, title, showTitle, seasonNumber, episodeNumber, episodeLabel, durationMs, showId, seasonId, weight, sources }. With pool sources, the pool comes from the library; weight (default 1) and sources (their names) are for your sort to use or ignore.'),
         h('span', { class: 'k' }, 'current'), h('span', null, "The channel's lineup now (same item shape). currentPlayingIndex = what's playing."),
         h('span', { class: 'k' }, 'params'), h('span', null, "This channel's setting values"),
         h('span', { class: 'k' }, 'targetMs'), h('span', null, 'How long the lineup should run'),

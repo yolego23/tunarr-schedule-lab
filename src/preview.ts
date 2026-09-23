@@ -65,6 +65,7 @@ function sortInput(data: ChannelData, params: Record<string, unknown>, targetMs:
   return {
     pool: data.pool,
     current: data.current,
+    lineupItems: data.lineupItems,
     currentPlayingIndex: data.playingIndex,
     params,
     targetMs,

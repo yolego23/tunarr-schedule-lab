@@ -78,6 +78,27 @@ for all channels, plus `lastAired(id)` from the channel's lineup. Preview
 timelines tag episodes already watched on the channel. The Watch Tracker
 screen shows what's streaming now and the log, where watches can be deleted.
 
+## Pool sources
+
+Each channel's **Episode pool** card (Channels screen) says where its episodes
+come from:
+
+- **+ Shows & movies:** search and browse your library; add whole shows,
+  single seasons, or movies.
+- **+ Rule:** for example "Shows on Cartoon Network" or "Animation, 1995–2005,
+  rated TV-Y7". Rules use network/studio, genre, rating, library, years, title,
+  and "added in the last N days", with a live count of what matches. They are
+  checked every time a lineup is built, so new matching shows join on their own.
+- **+ Custom show:** a Tunarr custom show.
+- **Shows in pool:** everything the sources add up to, with **Exclude** per show.
+
+Each source has a **weight**; every episode carries `weight` (the highest of
+its sources) and `sources` (their names). Sorts decide whether and how to use
+them. A channel without sources works as before: its pool is what's on its
+lineup. `ctx.current` always has the lineup, so sort code can keep episodes
+that aren't in the sources if it wants to. A new, empty channel can be filled
+entirely from its pool sources.
+
 ## AI (optional)
 
 Settings → AI sets up Anthropic (Claude), OpenRouter, and/or Ollama on your
@@ -97,8 +118,8 @@ settings and lineup; Schedule Lab copies the sort and its settings), rename,
 renumber, change the group, and delete. New channels pick their group from a
 list (or a new one) and get a suggested number: next to their group, right
 after the channel being copied, or the next free block of 100 for a new group.
-A new channel starts empty: add programming to it in Tunarr for now (pool
-sources, coming next, will let you pick shows here). Deleting saves the channel's settings
+A new channel starts empty: add pool sources to it (below), pick a sort,
+preview and apply. Deleting saves the channel's settings
 and lineup first; "Deleted channels" recreates it with the same id, so its
 Schedule Lab setup and watch history come back too.
 
@@ -175,10 +196,10 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.3): Watch Tracker and `ctx.history`, AI settings,
-  channel management and the guide check are done; pool sources and library
-  rules (beta.4), the Channel Builder (beta.5) and coded Automations (beta.6)
-  are next.
+- **2.1** (now 2.1.0-beta.4): Watch Tracker and `ctx.history`, AI settings,
+  channel management, the guide check, and pool sources with library rules
+  are done; the Channel Builder (beta.5) and coded Automations (beta.6) are
+  next.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.
 - **2.3**: library search for pools, custom shows and smart collections as

@@ -1,6 +1,8 @@
 // Reads a channel's lineup and episode pool from Tunarr and normalizes it into
 // the items sorts work with (the same fields 1.8 gave them).
 import { tunarr, type LineupItem, type ProgrammingResponse } from './tunarr.ts';
+import { resolvePool, type ResolvedPool } from './pool.ts';
+import { getSetup } from './channels.ts';
 import { makeRng } from './shared/analysis.js';
 
 export interface PoolItem {
@@ -16,6 +18,11 @@ export interface PoolItem {
   year?: number;
   releaseDate?: number;
   showId?: string;
+  seasonId?: string;
+  /** Pool sources: the highest weight of the sources that include it (1 without sources). */
+  weight?: number;
+  /** Labels of the pool sources that include it. */
+  sources?: string[];
   customShowId?: string;
   customIndex?: number;
 }
@@ -37,6 +44,10 @@ export interface ChannelData {
   current: CurrentItem[];
   /** The lineup exactly as Tunarr returned it (for backups). */
   lineupRaw: LineupItem[];
+  /** Episodes on the lineup now that aren't in the pool (shown in timelines, kept via ctx.current). */
+  lineupItems: PoolItem[];
+  /** Set when the pool comes from pool sources: what each source added. */
+  poolSummary: ResolvedPool['sources'] | null;
   schedule: unknown;
   totalDurationMs: number;
   /** Index into `current` of what Tunarr is playing now, and how far into it. */
@@ -81,6 +92,7 @@ export function normalizeProgram(id: string, entry: { type: string; duration: nu
     year: p.year,
     releaseDate: p.releaseDate,
     showId: p.showId ?? p.show?.uuid,
+    seasonId: p.seasonId ?? p.season?.uuid,
     customShowId: entry.customShowId,
     customIndex: entry.index,
   };
@@ -90,7 +102,7 @@ function fromProgramming(channelId: string, prog: ProgrammingResponse, startTime
   const pool: PoolItem[] = [];
   for (const [id, entry] of Object.entries(prog.programs || {})) {
     if (entry.type !== 'content' && entry.type !== 'custom') continue;
-    pool.push(normalizeProgram(id, entry));
+    pool.push({ ...normalizeProgram(id, entry), weight: 1, sources: [] });
   }
   const current: CurrentItem[] = (prog.lineup || []).map(li => ({
     id: li.id,
@@ -108,6 +120,8 @@ function fromProgramming(channelId: string, prog: ProgrammingResponse, startTime
     pool,
     current,
     lineupRaw: prog.lineup || [],
+    lineupItems: [],
+    poolSummary: null,
     schedule: prog.schedule ?? null,
     totalDurationMs,
     playingIndex: index,
@@ -155,6 +169,15 @@ export async function getChannelData(channelId: string, fresh = false): Promise<
   if (hit && !fresh && Date.now() - hit.fetchedAt < CACHE_MS) return hit;
   const [prog, ch] = await Promise.all([tunarr.programming(channelId), tunarr.channel(channelId)]);
   const data = fromProgramming(channelId, prog, Number(ch.startTime) || Date.now());
+  // With pool sources, the pool comes from the library instead of the lineup.
+  const pool = getSetup(channelId).pool;
+  if (pool.sources.length) {
+    const resolved = await resolvePool(pool);
+    const inPool = new Set(resolved.items.map(i => i.id));
+    data.lineupItems = data.pool.filter(p => !inPool.has(p.id));
+    data.pool = resolved.items;
+    data.poolSummary = resolved.sources;
+  }
   cache.set(channelId, data);
   return data;
 }
@@ -191,7 +214,7 @@ function sampleChannel(): ChannelData {
   const totalDurationMs = current.reduce((a, b) => a + b.durationMs, 0);
   sample = {
     channelId: 'sample', name: 'Sample data', number: 0, startTime: Date.now(), fetchedAt: Date.now(),
-    pool, current, lineupRaw: [], schedule: null, totalDurationMs, playingIndex: 0, playingOffsetMs: 0,
+    pool, current, lineupRaw: [], lineupItems: [], poolSummary: null, schedule: null, totalDurationMs, playingIndex: 0, playingOffsetMs: 0,
   };
   return sample;
 }

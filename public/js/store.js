@@ -97,7 +97,8 @@ export async function loadChannelData(channelId, fresh = false) {
   const cached = store.channelData.get(channelId);
   if (cached && !fresh && Date.now() - cached.loadedAt < 120_000) return cached;
   const d = await api('GET', `/api/channels/${encodeURIComponent(channelId)}/data${fresh ? '?fresh=1' : ''}`);
-  d.byId = new Map(d.pool.map(p => [p.id, p]));
+  // Pool episodes, plus lineup episodes that aren't in the pool (for timelines).
+  d.byId = new Map([...(d.lineupItems || []), ...d.pool].map(p => [p.id, p]));
   d.loadedAt = Date.now();
   store.channelData.set(channelId, d);
   return d;

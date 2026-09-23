@@ -36,6 +36,8 @@ export interface SortInput {
     any: Record<string, { total: number; last: number | null; watches: Array<{ at: number; minutes: number; channelId?: string }> }>;
     lastAired: Record<string, number>;
   };
+  /** Episodes on the lineup that aren't in the pool, so ctx.current still shows what they are. */
+  lineupItems?: unknown[];
   /** Whether ctx.ai can be used (set up and allowed for sorts). */
   aiAvailable?: boolean;
 }

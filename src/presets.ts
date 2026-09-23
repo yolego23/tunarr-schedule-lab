@@ -352,9 +352,10 @@ seed: number = 1   // Random seed
 // run(ctx) returns the new lineup: an array of items from ctx.pool (or
 // ctx.current), in play order, adding up to about ctx.targetMs.
 //
-// ctx.pool          episodes available to this channel
+// ctx.pool          episodes available to this channel (from its pool sources,
+//                   or what's on its lineup when it has none)
 //                   { id, title, showTitle, seasonNumber, episodeNumber,
-//                     episodeLabel, durationMs, ... }
+//                     episodeLabel, durationMs, weight, sources, ... }
 // ctx.current       the channel's current lineup (same item shape)
 // ctx.params        this channel's values for the settings declared above
 // ctx.targetMs      how long the lineup should run

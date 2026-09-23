@@ -20,6 +20,7 @@ import { storageStatus } from './storage-check.ts';
 import { PROVIDERS, listModels, listUsage, publicAiConfig, saveAiConfig, testProvider, type Provider } from './ai.ts';
 import { copyChannel, createChannel, deleteChannel, listArchive, recreateChannel, suggestNumber, updateChannelBasics } from './channel-admin.ts';
 import { checkGuide } from './guide-check.ts';
+import { cleanPool, forgetPoolCache, resolvePool, ruleOptions, searchLibrary } from './pool.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
@@ -70,6 +71,8 @@ route('GET', '/api/channels/:id/data', async ({ params, query }) => {
     pool: d.pool, current: d.current, totalDurationMs: d.totalDurationMs,
     playingIndex: d.playingIndex, playingOffsetMs: d.playingOffsetMs,
     scheduleType: (d.schedule as any)?.type ?? null,
+    lineupItems: d.lineupItems,
+    poolSummary: d.poolSummary,
   };
 });
 // Channel management (Tunarr channels themselves).
@@ -84,6 +87,29 @@ route('GET', '/api/channels/:id/guide-check', ({ params, query }) => checkGuide(
 route('GET', '/api/channels/:id/setup', ({ params }) => getSetup(params.id));
 route('PUT', '/api/channels/:id/setup', ({ params, body }) => saveSetup(params.id, body || {}));
 route('GET', '/api/filler-lists', () => tunarr.fillerLists());
+
+// ---------- library and pool sources ----------
+route('GET', '/api/library/options', () => ruleOptions());
+route('GET', '/api/library/search', ({ query }) => searchLibrary({
+  text: query.get('text') || undefined, types: query.get('types')?.split(',').filter(Boolean), libraryId: query.get('libraryId') || undefined, page: Number(query.get('page')) || 1,
+}));
+route('POST', '/api/library/rule-search', ({ body }) => searchLibrary({ rule: body?.rule, page: Number(body?.page) || 1 }));
+route('GET', '/api/library/children/:id', async ({ params }) => (await tunarr.seasons(params.id)));
+/** What a pool definition resolves to, without saving it. */
+route('POST', '/api/pool/resolve', async ({ body, query }) => {
+  if (query.get('fresh') === '1') forgetPoolCache();
+  const r = await resolvePool(cleanPool(body?.pool));
+  const shows = new Map<string, { showId: string | null; showTitle: string; episodes: number; durationMs: number; sources: string[] }>();
+  for (const i of r.items) {
+    const key = i.showId || i.showTitle;
+    const s = shows.get(key) || { showId: i.showId ?? null, showTitle: i.showTitle, episodes: 0, durationMs: 0, sources: [] };
+    s.episodes++;
+    s.durationMs += i.durationMs;
+    for (const src of i.sources || []) if (!s.sources.includes(src)) s.sources.push(src);
+    shows.set(key, s);
+  }
+  return { sources: r.sources, excluded: r.excluded, episodes: r.items.length, durationMs: r.durationMs, shows: [...shows.values()].sort((a, b) => a.showTitle.localeCompare(b.showTitle)) };
+});
 
 // ---------- sort library ----------
 route('GET', '/api/sorts', () => listSorts());

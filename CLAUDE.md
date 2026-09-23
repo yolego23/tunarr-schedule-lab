@@ -47,7 +47,8 @@ Automations, Settings (global settings and global variables).
   - Watch Tracker and `ctx.history` (done in 2.1.0-beta.1).
   - AI settings (Anthropic, OpenRouter, Ollama), channel management, guide check (done in 2.1.0-beta.2).
   - New-channel dialog: group dropdown, group-aware number suggestions (done in 2.1.0-beta.3).
-  - Pool sources + library rules (beta.4), Channel Builder (beta.5), coded Automations + library (beta.6).
+  - Pool sources + library rules (done in 2.1.0-beta.4).
+  - Channel Builder (beta.5), coded Automations + library (beta.6).
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
@@ -89,6 +90,10 @@ Automations, Settings (global settings and global variables).
 - Channel management (`src/channel-admin.ts`): create/copy/basics/delete; delete archives channel JSON +
   lineup in `channel_archive`; recreate uses the same id. Guide check (`src/guide-check.ts`) compares
   expectations saved on apply/restore with `/api/guide/channels/{id}` and the XMLTV file.
+- Pool sources (`src/pool.ts`): `channel_setup.pool_json` = { sources, exclusions }. Kinds: show, season,
+  movie, episode (all via `/api/programs/{id}/descendants`), custom_show, rule (search, then descendants).
+  Tunarr search pages are 0-based. Items get `weight` (max of sources) and `sources`; sorts decide use.
+  With sources, `getChannelData` builds `pool` from them; `lineupItems` keeps lineup episodes not in it.
 
 ## Tunarr API notes (1.3.15)
 - Lineup write: `POST /api/channels/{id}/programming` with `{type:"manual", lineup:[...], append?}`.

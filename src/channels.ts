@@ -6,6 +6,8 @@ import { HttpError, getVersion } from './sorts.ts';
 import { parseSettings, resolveValues } from './shared/sort-settings.js';
 import { appSetting } from './app-settings.ts';
 import { globalsMap } from './globals.ts';
+import { EMPTY_POOL, cleanPool, type PoolDefinition } from './pool.ts';
+import { forgetChannelData } from './channel-data.ts';
 
 export interface ChannelSetup {
   channelId: string;
@@ -15,6 +17,8 @@ export interface ChannelSetup {
   targetHours: number;
   alignStart: boolean;
   timetable: unknown;
+  /** Pool sources and exclusions; none = the pool is what's on the lineup. */
+  pool: PoolDefinition;
   updatedAt: number | null;
 }
 
@@ -26,6 +30,7 @@ interface SetupRow {
   target_hours: number;
   align_start: number;
   timetable_json: string | null;
+  pool_json: string | null;
   updated_at: number;
 }
 
@@ -33,7 +38,7 @@ export function getSetup(channelId: string): ChannelSetup {
   const row = db.prepare('SELECT * FROM channel_setup WHERE channel_id = ?').get(channelId) as SetupRow | undefined;
   if (!row) {
     const d = appSetting('channelDefaults');
-    return { channelId, sortId: null, sortVersion: null, values: {}, targetHours: d.targetHours, alignStart: d.alignStart, timetable: null, updatedAt: null };
+    return { channelId, sortId: null, sortVersion: null, values: {}, targetHours: d.targetHours, alignStart: d.alignStart, timetable: null, pool: structuredClone(EMPTY_POOL), updatedAt: null };
   }
   return {
     channelId,
@@ -43,6 +48,7 @@ export function getSetup(channelId: string): ChannelSetup {
     targetHours: row.target_hours,
     alignStart: !!row.align_start,
     timetable: row.timetable_json ? JSON.parse(row.timetable_json) : null,
+    pool: row.pool_json ? { ...EMPTY_POOL, ...JSON.parse(row.pool_json) } : structuredClone(EMPTY_POOL),
     updatedAt: row.updated_at,
   };
 }
@@ -78,14 +84,17 @@ export function saveSetup(channelId: string, input: Partial<ChannelSetup>): Chan
   }
   if (input.alignStart !== undefined) next.alignStart = !!input.alignStart;
   if (input.timetable !== undefined) next.timetable = input.timetable;
+  const poolChanged = input.pool !== undefined;
+  if (poolChanged) next.pool = cleanPool(input.pool);
   next.updatedAt = Date.now();
-  db.prepare(`INSERT INTO channel_setup (channel_id, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  db.prepare(`INSERT INTO channel_setup (channel_id, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, pool_json, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(channel_id) DO UPDATE SET sort_id = excluded.sort_id, sort_version = excluded.sort_version,
       values_json = excluded.values_json, target_hours = excluded.target_hours, align_start = excluded.align_start,
-      timetable_json = excluded.timetable_json, updated_at = excluded.updated_at`)
+      timetable_json = excluded.timetable_json, pool_json = excluded.pool_json, updated_at = excluded.updated_at`)
     .run(channelId, next.sortId, next.sortVersion, JSON.stringify(next.values), next.targetHours, next.alignStart ? 1 : 0,
-      next.timetable == null ? null : JSON.stringify(next.timetable), next.updatedAt);
+      next.timetable == null ? null : JSON.stringify(next.timetable), JSON.stringify(next.pool), next.updatedAt);
+  if (poolChanged) forgetChannelData(channelId);
   return getSetup(channelId);
 }
 

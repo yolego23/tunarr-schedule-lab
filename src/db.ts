@@ -108,6 +108,12 @@ CREATE TABLE IF NOT EXISTS global_vars (
 );
 `);
 
+// Columns added after 2.0 (CREATE TABLE IF NOT EXISTS doesn't add them to old databases).
+for (const [table, column, type] of [['channel_setup', 'pool_json', "TEXT"]] as const) {
+  const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(c => c.name);
+  if (!cols.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+}
+
 export function getSetting<T>(key: string, fallback: T): T {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(key) as { value: string } | undefined;
   if (!row) return fallback;

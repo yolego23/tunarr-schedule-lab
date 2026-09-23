@@ -110,6 +110,16 @@ export const tunarr = {
   copyChannel: (channelId: string) => call<TunarrChannel>('POST', '/api/channels', { type: 'copy', channelId }),
   deleteChannel: (id: string) => call<unknown>('DELETE', `/api/channels/${encodeURIComponent(id)}`),
 
+  // ---------- library ----------
+  /** Everything playable under a show, season, movie or episode (a movie or episode returns itself). */
+  descendants: (id: string) => call<Array<{ type: string; id: string; duration: number; program?: Record<string, any> }>>('GET', `/api/programs/${encodeURIComponent(id)}/descendants`, undefined, 120_000),
+  searchPrograms: (body: unknown) => call<{ results: Array<Record<string, any>>; page: number; totalPages: number; totalHits: number }>('POST', '/api/programs/search', body),
+  facetValues: (field: string) => call<{ facetValues: Record<string, number> }>('POST', `/api/programs/facets/${encodeURIComponent(field)}`, {}),
+  seasons: (showId: string) => call<Array<{ uuid: string; index: number; title: string; year?: number }>>('GET', `/api/programming/shows/${encodeURIComponent(showId)}/seasons`),
+  customShows: () => call<Array<{ id: string; name: string; contentCount: number; totalDuration: number }>>('GET', '/api/custom-shows'),
+  customShowPrograms: (id: string) => call<Array<Record<string, any>>>('GET', `/api/custom-shows/${encodeURIComponent(id)}/programs`, undefined, 120_000),
+  mediaSources: () => call<Array<{ id: string; name: string; type: string; libraries?: Array<{ id: string; name: string; mediaType: string; enabled?: boolean }> }>>('GET', '/api/media-sources'),
+
   transcodeConfigs: () => call<Array<{ id: string; name: string; isDefault?: boolean }>>('GET', '/api/transcode_configs'),
 
   /** Tunarr's schedule for a channel between two times. */
