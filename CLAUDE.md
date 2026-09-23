@@ -57,6 +57,7 @@ Automations, Settings (global settings and global variables).
   - Add new matching shows: skips shows already on the lineup (pool.get onChannel); the first add on a
     channel without sources turns its lineup shows into sources (sourcesFromItems); re-importing starters
     updates unedited ones as a new version (2.1.0-beta.9).
+  - Pool card "+ From lineup" and ctx.pool.fromLineup() (addLineupToPool) (2.1.0-beta.10).
   - 2.1.0 = the owner has tested all of 2.1 on the server.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via

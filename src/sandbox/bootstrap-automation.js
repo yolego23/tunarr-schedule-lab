@@ -96,6 +96,8 @@ async function __main() {
       /** Lists a source for approval on the Pool card instead of adding it. */
       suggest: function (source, reason) { return __call('pool.suggest', { source: source, reason: reason || '' }); },
       exclude: function (item) { return __call('pool.exclude', { item: item }); },
+      /** Adds the shows on the channel's lineup that aren't pool sources yet; returns { added: [...] }. */
+      fromLineup: function (opts) { return __call('pool.fromLineup', opts || {}); },
     },
     channels: {
       list: function () { return __call('channels.list'); },

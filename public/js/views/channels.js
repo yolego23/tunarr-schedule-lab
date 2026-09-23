@@ -137,7 +137,23 @@ Library rules now live in automations.`,
         await reloadPool();
       } catch (err) { toast(err.message, 'err'); }
     };
-    const poolCard = h('div', { class: 'card' }, poolEditor({ pool: setup.pool, lineupEpisodes: ch.programCount ?? '?', allowRules: false, onConvertRule: convertRule, onChange: () => markDirty() }));
+    const addFromLineup = async () => {
+      await saveNow();
+      const url2 = `/api/channels/${encodeURIComponent(ch.id)}/pool/from-lineup`;
+      const check = await api('POST', url2, { dryRun: true });
+      if (!check.added.length) { toast('Every show on the lineup is already a pool source.', 'warn'); return; }
+      const names = check.added.map(a => a.label);
+      const ok = await confirmDialog({
+        title: 'Add the lineup to the pool',
+        message: `Add ${names.length} show(s) from the lineup as pool sources?\n\n${names.slice(0, 25).join('\n')}${names.length > 25 ? `\n… and ${names.length - 25} more` : ''}${setup.pool.sources.length ? '' : '\n\nThe pool then comes from these sources, so new episodes of these shows join on their own.'}`,
+        confirmLabel: 'Add',
+      });
+      if (!ok) return;
+      const r = await api('POST', url2, {});
+      toast(`Added ${r.added.length} show(s) to the pool.`, 'ok');
+      await reloadPool();
+    };
+    const poolCard = h('div', { class: 'card' }, poolEditor({ pool: setup.pool, lineupEpisodes: ch.programCount ?? '?', allowRules: false, onConvertRule: convertRule, onAddFromLineup: ch.programCount ? addFromLineup : undefined, onChange: () => markDirty() }));
     const autoCard = automationsCard({ channel: ch, go, onPoolChanged: () => reloadPool().catch(err => toast(err.message, 'err')) });
     const settingsCard = h('div', { class: 'card' });
 

@@ -207,3 +207,19 @@ test('a channel without pool sources: lineup shows count as on the channel, and 
   assert.equal(approved.converted, 1);
   assert.deepEqual(channelsMod.getSetup('c4').pool.sources.map(s => s.ref), ['show1', 'show2'], 'the lineup show stayed');
 });
+
+test('from lineup: the shows on the lineup become pool sources (button and ctx.pool.fromLineup)', async () => {
+  channels.set('c5', { id: 'c5', number: 5, name: 'Channel c5', startTime: Date.now(), duration: 0 });
+  lineups.set('c5', [...episodes.show1, ...episodes.show2].map(e => ({ type: 'content', id: e.id, duration: e.duration })));
+  const dry = await auto.addLineupToPool('c5', { dryRun: true });
+  assert.deepEqual(dry.added.map(a => a.ref), ['show1', 'show2']);
+  assert.equal(channelsMod.getSetup('c5').pool.sources.length, 0, 'a dry run changes nothing');
+
+  let r = await auto.testCode({ code: 'async function run(ctx){ return (await ctx.pool.fromLineup()).added.length; }', channelId: 'c5' });
+  assert.equal(r.result, 2);
+  assert.match(r.changes[0].detail, /^Would add the 2 show\(s\) on the lineup/);
+
+  await auto.addLineupToPool('c5');
+  assert.deepEqual(channelsMod.getSetup('c5').pool.sources.map(s => s.ref), ['show1', 'show2']);
+  assert.equal((await auto.addLineupToPool('c5')).added.length, 0, 'nothing twice');
+});

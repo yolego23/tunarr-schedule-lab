@@ -1,6 +1,6 @@
 {
   "name": "schedule-lab",
-  "version": "2.1.0-beta.9",
+  "version": "2.1.0-beta.10",
   "private": true,
   "description": "Schedule Lab 2.0: builds and applies episode lineups for Tunarr channels.",
   "type": "module",

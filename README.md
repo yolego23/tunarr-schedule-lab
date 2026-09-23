@@ -108,6 +108,9 @@ come from:
 
 - **+ Shows & movies:** search and browse your library; add whole shows,
   single seasons (**Seasons**), single episodes (**Episodes**), or movies.
+- **+ From lineup:** adds the shows (and custom shows, movies) on the channel's
+  lineup now as pool sources, skipping ones already there. Handy before adding
+  other sources to a channel whose pool was its lineup.
 - **+ Custom show:** a Tunarr custom show.
 - **+ Smart collection:** a Tunarr smart collection (a saved search made in
   Tunarr); what it matches is read every time a lineup is built.
@@ -173,7 +176,7 @@ async function run(ctx) {
 
 Also: `ctx.params`, `ctx.channel`, `ctx.globals`, `ctx.history`, `ctx.dryRun`,
 `ctx.ai.available` / `ctx.ai.ask()`, `ctx.library.search(rule)`,
-`ctx.pool.get/add/suggest/exclude`, `ctx.channels.list/get` (read-only) and
+`ctx.pool.get/add/suggest/exclude/fromLineup`, `ctx.channels.list/get` (read-only) and
 `ctx.utils`. New automations start from a template that lists them all. The
 time limit (60 s by default) counts only the automation's own code, not the
 sorts it builds, applies or AI answers.
@@ -275,7 +278,7 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.9): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.10): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources, the Channel Builder and
   coded Automations with their library are done; library rules moved into
   automations.

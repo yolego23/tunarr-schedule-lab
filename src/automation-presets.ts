@@ -164,7 +164,7 @@ minLengthPercent: number = 50      // Refuse a lineup shorter than this % of the
 // ctx.ai.available / await ctx.ai.ask(prompt)   Settings → AI, if allowed for automations
 // await ctx.library.search(rule)   shows/movies matching { networks, genres, ratings, yearFrom, yearTo, addedWithinDays, text }
 // await ctx.pool.get()  { sources, exclusions, suggestions, onChannel: ids of shows etc. on the channel now }
-// await ctx.pool.add(source) / suggest(source, reason) / exclude(item)   (a channel without sources keeps
+// await ctx.pool.add(source) / suggest(source, reason) / exclude(item) / fromLineup({ weight? })   (a channel without sources keeps
 //                        its lineup's shows: they become sources before the first add)
 // await ctx.channels.list() / get(id)   read-only view of every channel
 async function run(ctx){

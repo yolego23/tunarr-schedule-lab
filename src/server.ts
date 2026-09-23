@@ -24,7 +24,7 @@ import { builderAi, builderOptions, createFromBuilder, prefillFrom } from './bui
 import { cleanPool, forgetPoolCache, resolvePool, ruleOptions, searchLibrary } from './pool.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 import {
-  automationStatus, convertRule, createAssignment, createAutomation, decideSuggestion, deleteAssignment, deleteAutomation, duplicateAutomation,
+  addLineupToPool, automationStatus, convertRule, createAssignment, createAutomation, decideSuggestion, deleteAssignment, deleteAutomation, duplicateAutomation,
   exportAutomation, getAutomation, getAutomationVersion, getRun, importAutomationFile, importPresetAutomations, listAssignments, listAutomations,
   listRuns, listSuggestions, nextRunAt, cleanTimetable, rescheduleAll, runNow, saveAutomationVersion, startAutomations, stopAutomations, testCode, updateAssignment, updateAutomation,
 } from './automations.ts';
@@ -224,6 +224,7 @@ route('POST', '/api/assignments/:id/run', ({ params, body }) => runNow(num(param
 route('GET', '/api/channels/:id/suggestions', ({ params }) => listSuggestions(params.id));
 route('POST', '/api/suggestions/:id/approve', ({ params }) => decideSuggestion(num(params.id), true));
 route('POST', '/api/suggestions/:id/dismiss', ({ params }) => decideSuggestion(num(params.id), false));
+route('POST', '/api/channels/:id/pool/from-lineup', ({ params, body }) => addLineupToPool(params.id, { dryRun: !!body?.dryRun }));
 route('POST', '/api/channels/:id/pool/convert-rule', ({ params, body }) => convertRule(params.id, String(body?.sourceId || '')));
 
 // ---------- export / import everything ----------

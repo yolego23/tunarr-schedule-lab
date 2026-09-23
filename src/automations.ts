@@ -584,6 +584,22 @@ async function poolForAdding(channelId: string): Promise<{ pool: PoolDefinition;
   return { pool: { ...pool, sources }, converted: sources.length };
 }
 
+/**
+ * The shows (custom shows, movies, loose episodes) on the channel's lineup
+ * now that aren't pool sources yet. Adds them as sources unless dryRun.
+ */
+export async function addLineupToPool(channelId: string, opts: { dryRun?: boolean; weight?: number } = {}) {
+  const data = await getChannelData(channelId, true);
+  const byId = new Map([...data.pool, ...data.lineupItems].map(p => [p.id, p]));
+  const onLineup = data.current.map(c => (c.id ? byId.get(c.id) : undefined)).filter((p): p is NonNullable<typeof p> => !!p);
+  const pool = getSetup(channelId).pool;
+  const have = new Set(pool.sources.map(s => s.kind + ':' + s.ref));
+  const weight = opts.weight === undefined ? 1 : Number(opts.weight);
+  const added = sourcesFromItems(onLineup).filter(s => !have.has(s.kind + ':' + s.ref)).map(s => ({ ...s, weight }));
+  if (added.length && !opts.dryRun) saveSetup(channelId, { pool: cleanPool({ ...pool, sources: [...pool.sources, ...added] }) });
+  return { added: added.map(s => ({ kind: s.kind, ref: s.ref!, label: s.label })), pool: opts.dryRun ? pool : getSetup(channelId).pool };
+}
+
 function makeBridge(st: RunState): BridgeHandler {
   const { channelId } = st;
   const json = (v: unknown) => JSON.stringify(v ?? null);
@@ -724,6 +740,14 @@ function makeBridge(st: RunState): BridgeHandler {
         db.prepare(`INSERT INTO pool_suggestions (channel_id, ref, source_json, reason, automation_name, run_id, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'open', ?)`)
           .run(channelId, src.ref, JSON.stringify(src), String(p.reason || '').slice(0, 1000), st.name, st.runId, Date.now());
         return json({ suggested: true });
+      }
+      case 'pool.fromLineup': {
+        const r = await addLineupToPool(channelId, { dryRun: true, weight: p.weight });
+        if (!r.added.length) return json({ added: [] });
+        poolChange();
+        change({ kind: 'pool.add', detail: `${st.dryRun ? 'Would add' : 'Added'} the ${r.added.length} show(s) on the lineup to the pool: ${r.added.map(a => a.label).slice(0, 10).join(', ')}${r.added.length > 10 ? ', …' : ''}` });
+        if (st.dryRun) return json({ added: r.added, dryRun: true });
+        return json({ added: (await addLineupToPool(channelId, { weight: p.weight })).added });
       }
       case 'pool.exclude': {
         const it = p.item || {};

@@ -19,9 +19,10 @@ const KIND_LABEL = { show: 'show', season: 'season', movie: 'movie', episode: 'e
  * poolEditor({ pool, lineupEpisodes, onChange, allowRules, onConvertRule }) -> element
  * allowRules: false hides "+ Rule" (library rules belong to Automations).
  * onConvertRule(source): shows "Convert" on existing rule sources.
+ * onAddFromLineup(): shows "+ From lineup" (the channel's current shows as sources).
  * `pool` is { sources, exclusions } and is edited in place; onChange() after each edit.
  */
-export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, emptyText, onConvertRule }) {
+export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, emptyText, onConvertRule, onAddFromLineup }) {
   const el = h('div');
   let resolved = null;
   let resolving = false;
@@ -76,6 +77,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
         h('h3', null, 'Episode pool'),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn small', onclick: () => browseDialog() }, '+ Shows & movies'),
+          onAddFromLineup ? h('button', { class: 'btn small', title: 'Add the shows on this channel\'s lineup now as pool sources', onclick: e => busy(e.currentTarget, onAddFromLineup) }, '+ From lineup') : null,
           allowRules ? h('button', { class: 'btn small', onclick: () => ruleDialog(null) }, '+ Rule') : null,
           h('button', { class: 'btn small', onclick: () => customShowDialog() }, '+ Custom show'),
           h('button', { class: 'btn small', title: 'A Tunarr smart collection (a saved search); what it matches is read every time a lineup is built', onclick: () => smartCollectionDialog() }, '+ Smart collection'),
