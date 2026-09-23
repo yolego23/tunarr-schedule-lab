@@ -15,7 +15,7 @@ export async function render(root, { go }) {
     h('div', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('span', null, 'Tunarr channels'),
         h('div', { class: 'btn-row' },
-          h('button', { class: 'btn small primary', onclick: () => editBasics(null) }, '+ New'),
+          h('button', { class: 'btn small primary', title: 'Make a new channel in the Channel Builder', onclick: () => go('channel-builder') }, '+ New'),
           h('button', { class: 'btn small ghost', onclick: e => busy(e.currentTarget, async () => { await loadChannels(true); drawList(); }) }, 'Reload'))),
       h('div', { style: { padding: '8px 10px', borderBottom: '1px solid var(--line)' } }, filter),
       listBody,

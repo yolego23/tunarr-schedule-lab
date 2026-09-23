@@ -133,7 +133,7 @@ server's LAN address, not localhost.
 
 ## Channels in Tunarr
 
-The Channels screen can create a new channel, copy one (Tunarr copies the
+The Channels screen's **+ New** opens the Channel Builder. It can also copy a channel (Tunarr copies the
 settings and lineup; Schedule Lab copies the sort and its settings), rename,
 renumber, change the group, and delete. New channels pick their group from a
 list (or a new one) and get a suggested number: next to their group, right
@@ -218,7 +218,7 @@ npm run dev
   and global variables.
 - **2.1** (now 2.1.0-beta.5): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources and the Channel Builder
-  are done; coded Automations (beta.6) are next, and library rules move
+  are done; coded Automations (beta.7) are next, and library rules move
   there.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.

@@ -49,7 +49,8 @@ Automations, Settings (global settings and global variables).
   - New-channel dialog: group dropdown, group-aware number suggestions (done in 2.1.0-beta.3).
   - Pool sources + library rules (done in 2.1.0-beta.4).
   - Channel Builder (done in 2.1.0-beta.5; picks shows/movies only, no rules).
-  - Coded Automations + library (beta.6); move library rules out of the Pool card into automations.
+  - Channels "+ New" opens the Channel Builder (2.1.0-beta.6).
+  - Coded Automations + library (beta.7); move library rules out of the Pool card into automations.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
