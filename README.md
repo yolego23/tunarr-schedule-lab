@@ -41,8 +41,19 @@ use a VPN to reach it from outside.
 3. **Preview & Compare**: run the channel's sort (or several sorts, several
    seeds each) and rank the candidates. Pick one → **Send to Apply**.
 4. **Apply & History**: Apply backs up the current lineup first (last 20 per
-   channel), writes the new one, sets the channel start time, and refreshes
-   the guide. **Undo last change** or **Restore** any backup.
+   channel), writes the new one, and sets the channel start time. **Undo last change** or **Restore** any backup.
+5. **Settings**: defaults for new channels, preview defaults and repeat
+   colours, backups kept per channel, the sort time limit, and **global
+   variables**.
+
+## Global variables
+
+Named values on the Settings screen (number, text, secret, yes/no, weekly
+hours or filler list). Every sort reads them as `ctx.globals.name`. On the
+Channels screen, the small menu next to any sort setting links it to a
+variable of a matching type, so one API key or one set of household work
+hours can feed many channels; change the variable once and they all follow.
+Renaming a variable keeps its links; one that's still linked can't be deleted.
 
 ## Things to know
 
@@ -53,7 +64,10 @@ use a VPN to reach it from outside.
 - "Start the lineup at the preview's start time" sets the channel's
   `startTime`, so what the preview shows at 8:00 plays at 8:00.
 - Setting values are stored per channel, including API keys (the AI
-  optimizer's). They are in the database and in exports.
+  optimizer's), unless linked to a global variable. They are in the database
+  and in exports.
+- Schedule Lab doesn't refresh Tunarr's guide (the refresh endpoint doesn't
+  work in Tunarr 1.3.15); Tunarr rebuilds it on its own schedule.
 - Saving a sort creates a new version. Channels stay on their version until
   you move them up on the Channels screen.
 
@@ -78,7 +92,7 @@ Types: `number`, `text`, `secret`, `yes/no`, `choice(...)`, `weekly hours`,
 `fractionInside(a, b)`. The Sort Builder's **How sorts work** button lists the
 whole `ctx`.
 
-Sorts run on the server in a sandbox: 10 seconds, 512 MB, no network or file
+Sorts run on the server in a sandbox: 10 seconds (changeable in Settings), 512 MB, no network or file
 access (`ctx.utils.claude()` is the one way out, for the AI optimizer).
 
 ## Development

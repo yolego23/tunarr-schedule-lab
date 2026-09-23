@@ -81,7 +81,6 @@ export const tunarr = {
     await call<unknown>('PUT', `/api/channels/${encodeURIComponent(id)}`, body);
   },
 
-  refreshGuide: () => call<unknown>('POST', '/api/xmltv/refresh', undefined, 120_000),
 };
 
 // Properties the PUT /api/channels/{id} schema accepts (openapi.json, 1.3.15).

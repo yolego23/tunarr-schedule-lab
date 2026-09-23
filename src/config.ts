@@ -12,9 +12,8 @@ export const config = {
   sharedDir: path.resolve(here, 'shared'),
   /** Tunarr versions this build was tested against. */
   testedTunarrVersions: ['1.3.15'],
-  /** Custom sort code limit, in ms of sandbox time. */
+  /** Default custom sort time limit, in ms of sandbox time (the Settings screen overrides it). */
   sortTimeLimitMs: 10_000,
   /** Sandboxes that may run at once. */
   sandboxConcurrency: 2,
-  backupsPerChannel: 20,
 };

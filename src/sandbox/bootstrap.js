@@ -71,6 +71,7 @@ async function __main() {
     scheduleStart: new Date(input.scheduleStartMs).toISOString(),
     scheduleStartMs: input.scheduleStartMs,
     channel: input.channel,
+    globals: Object.freeze(input.globals || {}),
     utils: utils,
     history: history,
   };

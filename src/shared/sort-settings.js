@@ -69,16 +69,41 @@ export function coerce(setting, raw) {
   }
 }
 
+// ---------- global variables ----------
+// Named values shared by every sort (ctx.globals) that a channel's setting
+// can also be linked to. A linked setting is stored as { $global: "name" }.
+
+export const GLOBAL_TYPES = ['number', 'text', 'secret', 'yes/no', 'weekly hours', 'filler list'];
+export const GLOBAL_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export function isLink(v) {
+  return !!v && typeof v === 'object' && typeof v.$global === 'string';
+}
+
+/** Whether a setting of this type can take its value from a global of that type. */
+export function canLink(settingType, globalType) {
+  if (settingType === globalType) return true;
+  const textual = ['text', 'secret'];
+  return (textual.includes(settingType) || settingType === 'choice') && textual.includes(globalType);
+}
+
 /**
- * The values a channel runs with: its stored values for declared keys, else defaults.
+ * The values a channel runs with: its stored values for declared keys, else
+ * defaults. `globals` maps name -> { type, value }; linked settings take the
+ * global's value (or the default if that global is gone).
  * @returns {Record<string, any>}
  */
-export function resolveValues(settings, stored) {
+export function resolveValues(settings, stored, globals) {
   /** @type {Record<string, any>} */
   const out = {};
   for (const s of settings) {
     const has = stored && Object.prototype.hasOwnProperty.call(stored, s.key);
-    let v = has ? coerce(s, stored[s.key]) : s.default;
+    let raw = has ? stored[s.key] : undefined;
+    if (isLink(raw)) {
+      const g = globals && globals[raw.$global];
+      raw = g && canLink(s.type, g.type) ? g.value : undefined;
+    }
+    let v = raw === undefined ? s.default : coerce(s, raw);
     if (s.type === 'choice' && !s.options.includes(v)) v = s.default;
     out[s.key] = v;
   }

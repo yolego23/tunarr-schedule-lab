@@ -1,10 +1,10 @@
 // Apply & History: apply a preview (after a backup), undo, restore any of the
-// last 20 backups, refresh the guide, and see what changed when.
+// last 20 backups, and see what changed when.
 import { api, busy, clear, confirmDialog, download, fmtAgo, fmtDur, fmtWhen, h, slug, toast } from '../ui.js';
-import { channelLabel, findChannel, forgetChannelData, loadChannelData, loadChannels, selectChannel, store } from '../store.js';
+import { channelLabel, findChannel, forgetChannelData, loadChannelData, loadChannels, loadSettings, selectChannel, store } from '../store.js';
 
 export async function render(root, { params, go }) {
-  await loadChannels();
+  await Promise.all([loadChannels(), loadSettings()]);
   const requested = params.get('channel');
   if (requested) selectChannel(requested);
 
@@ -20,15 +20,11 @@ export async function render(root, { params, go }) {
       h('div', { class: 'panel-head' }, 'Apply'),
       h('div', { class: 'panel-body' },
         h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Channel'), channelSelect),
-        readyCard,
-        h('div', { class: 'card flat' },
-          h('h3', null, 'Guide'),
-          h('p', { class: 'dim small' }, 'Every apply, undo and restore refreshes the guide. Use this if the guide still looks stale.'),
-          h('button', { class: 'btn', onclick: e => busy(e.currentTarget, async () => { await api('POST', '/api/guide/refresh'); toast('Guide refresh started in Tunarr.', 'ok'); }) }, 'Refresh guide now')))),
+        readyCard)),
     h('div', { class: 'panel' },
       h('div', { class: 'panel-head' }, 'Backups & history'),
       h('div', { class: 'panel-body' },
-        h('h3', null, 'Backups (last 20 for this channel)'),
+        h('h3', null, `Backups (last ${store.settings.backupsPerChannel} for this channel)`),
         backupsBox,
         h('div', { class: 'btn-row', style: { justifyContent: 'space-between', marginTop: '18px' } },
           h('h3', { style: { margin: 0 } }, 'History'),

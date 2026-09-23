@@ -1,7 +1,7 @@
 // Channels: each channel's pool, its assigned library sort and version, its
 // own values for that sort's settings, and how long a lineup to build.
 import { api, busy, clear, fmtDur, fmtWhen, h, toast } from '../ui.js';
-import { channelLabel, findSort, loadChannelData, loadChannels, loadSorts, selectChannel, store } from '../store.js';
+import { channelLabel, findSort, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
@@ -19,7 +19,7 @@ export async function render(root, { go }) {
 
   let channels = [];
   try {
-    [channels] = await Promise.all([loadChannels(), loadSorts()]);
+    [channels] = await Promise.all([loadChannels(), loadSorts(), loadGlobals(true)]);
   } catch (err) {
     clear(listBody, h('div', { class: 'empty' }, h('b', null, "Couldn't load channels"), err.message));
     return;
@@ -65,7 +65,7 @@ export async function render(root, { go }) {
           h('button', { class: 'btn small', onclick: () => go('preview', { channel: ch.id, run: '1' }), disabled: !setup.sortId, title: setup.sortId ? '' : 'Assign a sort first' }, 'Preview this channel'))),
       h('div', { class: 'panel-body' },
         h('div', { class: 'page-width' }, lineupCard, sortCard, settingsCard)),
-      h('div', { class: 'panel-foot' }, saveBtn, h('span', { class: 'dim small' }, 'Settings are saved per channel; other channels using the same sort keep their own values.')));
+      h('div', { class: 'panel-foot' }, saveBtn, h('span', { class: 'dim small' }, 'Settings are saved per channel. Use the small menu by a setting to link it to a global variable instead.')));
 
     // ---- lineup summary (from Tunarr) ----
     loadChannelData(ch.id).then(d => {
@@ -145,7 +145,7 @@ export async function render(root, { go }) {
       clear(settingsCard,
         h('h3', null, 'Settings for this channel'),
         setup.sortId
-          ? settingsForm({ settings, values: setup.values, onChange: v => { setup.values = { ...setup.values, ...v }; markDirty(); } })
+          ? settingsForm({ settings, values: setup.values, globals: store.globals, onChange: v => { setup.values = { ...setup.values, ...v }; markDirty(); } })
           : h('p', { class: 'dim small' }, 'Assign a sort to see its settings.'),
         h('h3', null, 'Lineup'),
         h('div', { class: 'row' },

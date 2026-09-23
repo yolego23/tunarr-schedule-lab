@@ -8,7 +8,8 @@ export const store = {
   status: null,
   channels: null,        // Tunarr channels with their setup
   sorts: null,           // library
-  settings: null,        // { scoreCode, thresholds }
+  settings: null,        // global settings (see src/app-settings.ts)
+  globals: null,         // global variables
   fillerLists: null,
   channelData: new Map(), // channelId -> { pool, current, ... , byId }
   /** Last preview per channel, so Apply & History can pick it up. */
@@ -44,9 +45,20 @@ export async function loadSorts(force = false) {
   return store.sorts;
 }
 
-export async function loadSettings() {
-  if (!store.settings) store.settings = await api('GET', '/api/settings');
+export async function loadSettings(force = false) {
+  if (!store.settings || force) store.settings = await api('GET', '/api/settings');
   return store.settings;
+}
+
+/** Global variables: [{ name, type, value, description, usedBy }]. */
+export async function loadGlobals(force = false) {
+  if (!store.globals || force) store.globals = await api('GET', '/api/globals');
+  return store.globals;
+}
+
+/** name -> { type, value }, the shape resolveValues() takes. */
+export function globalsMap() {
+  return Object.fromEntries((store.globals || []).map(g => [g.name, { type: g.type, value: g.value }]));
 }
 
 export async function loadFillerLists() {

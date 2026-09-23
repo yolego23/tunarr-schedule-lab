@@ -358,6 +358,7 @@ seed: number = 1   // Random seed
 // ctx.utils         shuffle(arr, rng), makeRng(seed), scoreSchedule(list),
 //                   hours(weeklyHours) -> { isInside(t), fractionInside(a, b) },
 //                   claude({ apiKey, prompt }) -> Promise<text>
+// ctx.globals       global variables from the Settings screen, by name
 // ctx.history       watched(id), lastAired(id)  (filled in from 2.1)
 //
 // To pad with filler, return { type: 'flex', durationMs } items.

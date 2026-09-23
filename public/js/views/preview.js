@@ -1,7 +1,7 @@
 // Preview & Compare: run one or more library sorts on a channel, rank the
 // candidates with an editable scoring function, and inspect the timeline.
 import { api, busy, clear, fmtDur, fromLocalInput, h, nowMinute, toLocalInput, toast } from '../ui.js';
-import { channelLabel, currentItems, expandItems, findChannel, loadChannelData, loadChannels, loadSettings, loadSorts, selectChannel, store } from '../store.js';
+import { channelLabel, currentItems, expandItems, findChannel, globalsMap, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, selectChannel, store } from '../store.js';
 import { codeEditor } from '../components/code-editor.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
 import { makeHours } from '/shared/weekly-hours.js';
@@ -9,10 +9,11 @@ import { parseSettings, resolveValues } from '/shared/sort-settings.js';
 import { DEFAULT_SCORE_CODE } from '/shared/analysis.js';
 
 // Kept while the app is open so switching screens doesn't lose results.
-const state = { channelId: '', startMs: 0, hours: 0, include: new Set(), candidates: 6, results: null, selected: 0, view: 'preview' };
+const state = { channelId: '', startMs: 0, hours: 0, include: new Set(), candidates: 0, results: null, selected: 0, view: 'preview' };
 
 export async function render(root, { params, go }) {
-  await Promise.all([loadChannels(), loadSorts(), loadSettings()]);
+  await Promise.all([loadChannels(), loadSorts(), loadSettings(), loadGlobals()]);
+  if (!state.candidates) state.candidates = store.settings.candidates;
   const requested = params.get('channel');
   if (requested) { selectChannel(requested); }
   if (state.channelId !== store.selectedChannelId) {
@@ -86,7 +87,7 @@ export async function render(root, { params, go }) {
   for (const input of [tight, loose]) {
     input.onchange = async () => {
       store.settings.thresholds = { tight: Number(tight.value) || 0, loose: Number(loose.value) || 0 };
-      api('PUT', '/api/settings/thresholds', { value: store.settings.thresholds }).catch(() => null);
+      api('PUT', '/api/settings/thresholds', { value: store.settings.thresholds }).catch(err => toast(err.message, 'warn'));
       drawRight();
     };
   }
@@ -106,7 +107,7 @@ export async function render(root, { params, go }) {
       try {
         const v = await api('GET', `/api/sorts/${ch.setup.sortId}/versions/${ch.setup.sortVersion}`);
         const { settings } = parseSettings(v.code);
-        const values = resolveValues(settings, ch.setup.values);
+        const values = resolveValues(settings, ch.setup.values, globalsMap());
         const weekly = settings.filter(s => s.type === 'weekly hours').map(s => values[s.key]).filter(Boolean);
         if (weekly.length) away = { helper: makeHours(weekly), labels: settings.filter(s => s.type === 'weekly hours').map(s => s.label) };
       } catch { /* shading is optional */ }

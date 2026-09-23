@@ -29,6 +29,8 @@ export interface SortInput {
   targetMs: number;
   scheduleStartMs: number;
   channel: { id: string; name: string; number: number };
+  /** Global variables, as ctx.globals. */
+  globals: Record<string, unknown>;
 }
 
 export type SortOutputItem = { id: string } | { type: 'flex'; durationMs: number } | { ci: number };
@@ -63,11 +65,11 @@ async function slot<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-export function runSort(code: string, input: SortInput, scoreCode?: string): Promise<SortResult> {
-  return slot(() => runOnce(code, input, scoreCode));
+export function runSort(code: string, input: SortInput, scoreCode?: string, timeLimitMs = config.sortTimeLimitMs): Promise<SortResult> {
+  return slot(() => runOnce(code, input, scoreCode, timeLimitMs));
 }
 
-function runOnce(code: string, input: SortInput, scoreCode?: string): Promise<SortResult> {
+function runOnce(code: string, input: SortInput, scoreCode: string | undefined, timeLimitMs: number): Promise<SortResult> {
   return new Promise((resolve, reject) => {
     const child = fork(RUNNER, [], {
       execArgv: ['--permission', '--max-old-space-size=512', '--disable-warning=ExperimentalWarning'],
@@ -100,8 +102,8 @@ function runOnce(code: string, input: SortInput, scoreCode?: string): Promise<So
       const now = Date.now();
       if (clockRunning && bridgesOpen === 0) usedMs += now - lastTick;
       lastTick = now;
-      if (usedMs > config.sortTimeLimitMs) {
-        finish(new SortError(`The sort took longer than ${config.sortTimeLimitMs / 1000} seconds and was stopped.`));
+      if (usedMs > timeLimitMs) {
+        finish(new SortError(`The sort took longer than ${timeLimitMs / 1000} seconds and was stopped.`));
       } else if (now - startedAt > 5 * 60_000) {
         finish(new SortError('The sort ran for 5 minutes (including helper calls) and was stopped.'));
       }
@@ -110,7 +112,7 @@ function runOnce(code: string, input: SortInput, scoreCode?: string): Promise<So
     child.on('message', (msg: any) => {
       switch (msg?.kind) {
         case 'ready':
-          child.send({ kind: 'start', prelude: PRELUDE, code, scoreCode, input: JSON.stringify(input), timeLimitMs: config.sortTimeLimitMs });
+          child.send({ kind: 'start', prelude: PRELUDE, code, scoreCode, input: JSON.stringify(input), timeLimitMs: timeLimitMs });
           break;
         case 'running':
           clockRunning = true;
@@ -138,7 +140,7 @@ function runOnce(code: string, input: SortInput, scoreCode?: string): Promise<So
         }
         case 'error':
           finish(new SortError(/Script execution timed out/.test(msg.error)
-            ? `The sort took longer than ${config.sortTimeLimitMs / 1000} seconds and was stopped.`
+            ? `The sort took longer than ${timeLimitMs / 1000} seconds and was stopped.`
             : msg.error));
           break;
       }

@@ -11,6 +11,7 @@ const SCREENS = [
   { path: 'apply', label: 'Apply & History', load: () => import('./views/apply.js') },
   { path: 'watch', label: 'Watch Tracker', later: '2.1', load: () => import('./views/later.js') },
   { path: 'automations', label: 'Automations', later: '2.1', load: () => import('./views/later.js') },
+  { path: 'settings', label: 'Settings', load: () => import('./views/settings.js') },
 ];
 
 const main = document.getElementById('main');
@@ -114,7 +115,7 @@ document.getElementById('btnImport').onclick = async () => {
   try {
     await api('POST', '/api/import', data);
     toast('Import finished.', 'ok');
-    store.sorts = null; store.channels = null; store.settings = null;
+    store.sorts = null; store.channels = null; store.settings = null; store.globals = null;
     await Promise.all([loadSorts(true), loadChannels(true).catch(() => null)]);
     route();
   } catch (err) { toast(err.message, 'err'); }

@@ -73,6 +73,14 @@ CREATE TABLE IF NOT EXISTS apply_log (
   message      TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS apply_log_channel ON apply_log(channel_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS global_vars (
+  name        TEXT PRIMARY KEY,
+  type        TEXT NOT NULL,
+  value_json  TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  updated_at  INTEGER NOT NULL
+);
 `);
 
 export function getSetting<T>(key: string, fallback: T): T {

@@ -4,7 +4,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.ts';
-import { db, getSetting, setSetting, transaction } from './db.ts';
+import { db, transaction } from './db.ts';
 import { tunarr, TunarrError } from './tunarr.ts';
 import { getChannelData } from './channel-data.ts';
 import { getSetup, listChannels, saveSetup } from './channels.ts';
@@ -12,9 +12,12 @@ import {
   HttpError, createSort, deleteSort, duplicateSort, exportSort, getSort, getVersion, importPresets, importSortFile, listSorts, saveVersion, updateSort,
 } from './sorts.ts';
 import { rankCandidates, runPreview } from './preview.ts';
-import { applyPreview, getBackupFile, listBackups, listHistory, refreshGuide, restoreBackup, undoLast } from './apply.ts';
+import { applyPreview, getBackupFile, listBackups, listHistory, restoreBackup, undoLast } from './apply.ts';
 import { NEW_SORT_CODE } from './presets.ts';
-import { DEFAULT_SCORE_CODE } from './shared/analysis.js';
+import { allSettings, resetAppSetting, saveAppSetting } from './app-settings.ts';
+import { deleteGlobal, listGlobals, saveGlobal } from './globals.ts';
+
+const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
 
 type Params = Record<string, string>;
 type Handler = (ctx: { params: Params; query: URLSearchParams; body: any }) => Promise<unknown> | unknown;
@@ -34,7 +37,10 @@ const num = (v: string) => {
 
 // ---------- status ----------
 route('GET', '/api/status', async () => {
-  const status: Record<string, unknown> = { tunarrUrl: config.tunarrUrl, tested: config.testedTunarrVersions, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone };
+  const status: Record<string, unknown> = {
+    tunarrUrl: config.tunarrUrl, tested: config.testedTunarrVersions, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    dataDir: config.dataDir, port: config.port, appVersion: APP_VERSION,
+  };
   try {
     const v = await tunarr.version();
     status.connected = true;
@@ -89,23 +95,16 @@ route('GET', '/api/channels/:id/backups', ({ params }) => listBackups(params.id)
 route('GET', '/api/backups/:id', ({ params }) => getBackupFile(num(params.id)));
 route('POST', '/api/backups/:id/restore', ({ params }) => restoreBackup(num(params.id)));
 route('GET', '/api/history', ({ query }) => listHistory(query.get('channelId') || undefined));
-route('POST', '/api/guide/refresh', () => refreshGuide());
 
-// ---------- app settings (scoring code, colour thresholds) ----------
-const SETTING_DEFAULTS: Record<string, unknown> = {
-  scoreCode: DEFAULT_SCORE_CODE,
-  thresholds: { tight: 30, loose: 720 },
-};
-route('GET', '/api/settings', () => Object.fromEntries(Object.entries(SETTING_DEFAULTS).map(([k, d]) => [k, getSetting(k, d)])));
-route('PUT', '/api/settings/:key', ({ params, body }) => {
-  if (!(params.key in SETTING_DEFAULTS)) throw new HttpError(404, `Unknown setting "${params.key}".`);
-  setSetting(params.key, body?.value ?? SETTING_DEFAULTS[params.key]);
-  return { ok: true };
-});
-route('DELETE', '/api/settings/:key', ({ params }) => {
-  db.prepare('DELETE FROM app_settings WHERE key = ?').run(params.key);
-  return { value: SETTING_DEFAULTS[params.key] };
-});
+// ---------- global settings ----------
+route('GET', '/api/settings', () => allSettings());
+route('PUT', '/api/settings/:key', ({ params, body }) => ({ value: saveAppSetting(params.key, body?.value) }));
+route('DELETE', '/api/settings/:key', ({ params }) => ({ value: resetAppSetting(params.key) }));
+
+// ---------- global variables ----------
+route('GET', '/api/globals', () => listGlobals());
+route('PUT', '/api/globals/:name', ({ params, body }) => saveGlobal(params.name, body || {}));
+route('DELETE', '/api/globals/:name', ({ params }) => { deleteGlobal(params.name); return { ok: true }; });
 
 // ---------- export / import everything ----------
 route('GET', '/api/export', ({ query }) => {
@@ -115,6 +114,7 @@ route('GET', '/api/export', ({ query }) => {
     sorts: db.prepare('SELECT * FROM sorts').all(),
     sortVersions: db.prepare('SELECT * FROM sort_versions').all(),
     channelSetup: db.prepare('SELECT * FROM channel_setup').all(),
+    globalVars: db.prepare('SELECT * FROM global_vars').all(),
     applyLog: db.prepare('SELECT * FROM apply_log').all(),
   };
   if (query.get('backups') === '1') data.backups = db.prepare('SELECT * FROM backups').all();
@@ -124,7 +124,7 @@ route('POST', '/api/import', ({ body }) => {
   if (body?.kind !== 'schedule-lab-export') throw new HttpError(400, 'This is not a Schedule Lab export file.');
   const tables: Array<[string, unknown]> = [
     ['app_settings', body.appSettings], ['sorts', body.sorts], ['sort_versions', body.sortVersions],
-    ['channel_setup', body.channelSetup], ['apply_log', body.applyLog], ['backups', body.backups],
+    ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['apply_log', body.applyLog], ['backups', body.backups],
   ];
   const counts: Record<string, number> = {};
   transaction(() => {

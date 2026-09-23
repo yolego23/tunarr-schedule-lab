@@ -8,6 +8,8 @@ import { HttpError, getSort, getVersion } from './sorts.ts';
 import { toWritableLineupItem, type LineupItem } from './tunarr.ts';
 import { parseSettings, resolveValues } from './shared/sort-settings.js';
 import { scoreSchedule } from './shared/analysis.js';
+import { appSetting } from './app-settings.ts';
+import { globalsForSorts, globalsMap } from './globals.ts';
 
 export interface Preview {
   id: string;
@@ -66,8 +68,11 @@ function sortInput(data: ChannelData, params: Record<string, unknown>, targetMs:
     targetMs,
     scheduleStartMs,
     channel: { id: data.channelId, name: data.name, number: data.number },
+    globals: globalsForSorts(),
   };
 }
+
+const timeLimitMs = () => appSetting('sortTimeLimitSec') * 1000;
 
 function checkTiming(targetHours: unknown, scheduleStartMs: unknown) {
   const hours = Number(targetHours);
@@ -85,7 +90,7 @@ function resolveSort(channelId: string, sortId: number, version: number | undefi
   const { settings } = parseSettings(row.code);
   // The channel's own values apply when this is the channel's sort.
   const stored = explicitParams ?? (setup?.sortId === sortId ? setup.values : {});
-  return { code: row.code, version: row.version, settings, params: resolveValues(settings, stored) };
+  return { code: row.code, version: row.version, settings, params: resolveValues(settings, stored, globalsMap()) };
 }
 
 function latestVersion(sortId: number) {
@@ -112,7 +117,7 @@ export async function runPreview(req: RunRequest) {
     code = String(req.code);
     const { settings, errors } = parseSettings(code);
     if (errors.length) throw new HttpError(400, `Settings block: ${errors.join('; ')}`);
-    params = resolveValues(settings, req.params || {});
+    params = resolveValues(settings, req.params || {}, globalsMap());
   } else if (req.sortId) {
     const r = resolveSort(req.channelId, Number(req.sortId), req.sortVersion ? Number(req.sortVersion) : undefined, req.params);
     code = r.code; params = r.params; sortId = Number(req.sortId); sortVersion = r.version;
@@ -126,7 +131,7 @@ export async function runPreview(req: RunRequest) {
 
 async function runOrExplain(code: string, input: ReturnType<typeof sortInput>, scoreCode?: string) {
   try {
-    return await runSort(code, input, scoreCode);
+    return await runSort(code, input, scoreCode, timeLimitMs());
   } catch (err) {
     if (err instanceof SortError) throw new HttpError(422, err.message);
     throw err;
@@ -198,7 +203,7 @@ export async function rankCandidates(req: RankRequest) {
       if (hasSeed) params.seed = (Number(r.params.seed) || 1) + i * 7919;
       const label = `${name} v${r.version}` + (hasSeed ? ` · seed ${params.seed}` : '');
       jobs.push(
-        runSort(r.code, sortInput(data, params, targetMs, start), req.scoreCode)
+        runSort(r.code, sortInput(data, params, targetMs, start), req.scoreCode, timeLimitMs())
           .then(result => finishPreview(data, result, { label, sortId: Number(entry.sortId), sortVersion: r.version, start, targetMs }))
           .catch(err => ({ label, error: err instanceof Error ? err.message : String(err) })),
       );

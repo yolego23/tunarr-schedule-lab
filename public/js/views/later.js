@@ -12,7 +12,7 @@ const ABOUT = {
   automations: {
     title: 'Automations',
     lines: [
-      'Rebuilds each channel on its own timetable (daily, weekly, monthly or manual), with jobs in one queue, one or two at a time, spread across an overnight window, and one guide refresh per batch.',
+      'Rebuilds each channel on its own timetable (daily, weekly, monthly or manual), with jobs in one queue, one or two at a time, spread across an overnight window.',
       'Each automated rebuild is backed up first and stops if the new lineup is much shorter than the old one.',
     ],
   },

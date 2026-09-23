@@ -58,3 +58,32 @@ test('sort files round-trip through export and import', () => {
   const r = sorts.importSortFile(JSON.parse(JSON.stringify(file)));
   assert.deepEqual(r.added, ['Full cycle (2)']);
 });
+
+test('global variables: link, rename follows links, delete refused while linked', async () => {
+  const globals = await import('../src/globals.ts');
+  globals.saveGlobal('shortWindow', { type: 'number', value: '6', description: 'hours' });
+  assert.throws(() => globals.saveGlobal('bad name', { type: 'number', value: 1 }), /letters, numbers/);
+  assert.throws(() => globals.saveGlobal('x', { type: 'choice', value: 1 }), /Type must be/);
+  channels.saveSetup('chan-a', { values: { repeatWindowHours: { $global: 'shortWindow' } } });
+  assert.equal(channels.channelSortValues(channels.getSetup('chan-a'))!.values.repeatWindowHours, 6);
+  globals.saveGlobal('shortWindow', { name: 'tinyWindow', value: 3 });
+  assert.deepEqual(channels.getSetup('chan-a').values.repeatWindowHours, { $global: 'tinyWindow' });
+  assert.equal(channels.channelSortValues(channels.getSetup('chan-a'))!.values.repeatWindowHours, 3);
+  assert.throws(() => globals.deleteGlobal('tinyWindow'), /linked from 1 channel/);
+  assert.throws(() => globals.saveGlobal('tinyWindow', { type: 'text' }), /type can't change/);
+  assert.deepEqual(globals.globalsForSorts(), { tinyWindow: 3 });
+  channels.saveSetup('chan-a', { values: {} });
+  globals.deleteGlobal('tinyWindow');
+  assert.deepEqual(globals.listGlobals(), []);
+});
+
+test('app settings are validated and drive channel defaults', async () => {
+  const app = await import('../src/app-settings.ts');
+  app.saveAppSetting('channelDefaults', { targetHours: 72, alignStart: false });
+  assert.equal(channels.getSetup('never-set-up').targetHours, 72);
+  assert.equal(channels.getSetup('never-set-up').alignStart, false);
+  assert.throws(() => app.saveAppSetting('backupsPerChannel', 0), /between 1 and 100/);
+  assert.throws(() => app.saveAppSetting('thresholds', { tight: 100, loose: 50 }), /at least the red/);
+  assert.throws(() => app.saveAppSetting('nope', 1), /Unknown setting/);
+  assert.equal((app.resetAppSetting('channelDefaults') as { targetHours: number }).targetHours, 168);
+});

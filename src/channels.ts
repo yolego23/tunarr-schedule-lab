@@ -4,6 +4,8 @@ import { db } from './db.ts';
 import { tunarr } from './tunarr.ts';
 import { HttpError, getVersion } from './sorts.ts';
 import { parseSettings, resolveValues } from './shared/sort-settings.js';
+import { appSetting } from './app-settings.ts';
+import { globalsMap } from './globals.ts';
 
 export interface ChannelSetup {
   channelId: string;
@@ -27,12 +29,11 @@ interface SetupRow {
   updated_at: number;
 }
 
-const DEFAULT_TARGET_HOURS = 168;
-
 export function getSetup(channelId: string): ChannelSetup {
   const row = db.prepare('SELECT * FROM channel_setup WHERE channel_id = ?').get(channelId) as SetupRow | undefined;
   if (!row) {
-    return { channelId, sortId: null, sortVersion: null, values: {}, targetHours: DEFAULT_TARGET_HOURS, alignStart: true, timetable: null, updatedAt: null };
+    const d = appSetting('channelDefaults');
+    return { channelId, sortId: null, sortVersion: null, values: {}, targetHours: d.targetHours, alignStart: d.alignStart, timetable: null, updatedAt: null };
   }
   return {
     channelId,
@@ -93,7 +94,7 @@ export function channelSortValues(setup: ChannelSetup) {
   if (!setup.sortId || !setup.sortVersion) return null;
   const v = getVersion(setup.sortId, setup.sortVersion);
   const { settings } = parseSettings(v.code);
-  return { code: v.code, settings, values: resolveValues(settings, setup.values) };
+  return { code: v.code, settings, values: resolveValues(settings, setup.values, globalsMap()) };
 }
 
 /** Tunarr's channels, each with its Schedule Lab setup. */

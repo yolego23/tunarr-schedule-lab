@@ -1,7 +1,7 @@
 // Sort Builder: write or edit a sort, declare its settings, test it against
 // sample data or a real channel's pool, and save it to the library.
 import { api, busy, clear, confirmDialog, fmtDur, fromLocalInput, h, modal, nowMinute, promptDialog, toLocalInput, toast } from '../ui.js';
-import { channelLabel, expandItems, findSort, loadChannelData, loadChannels, loadSettings, loadSorts, store } from '../store.js';
+import { channelLabel, expandItems, findSort, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, store } from '../store.js';
 import { codeEditor } from '../components/code-editor.js';
 import { settingsForm } from '../components/settings-form.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
@@ -11,7 +11,7 @@ import { SETTING_TYPES, addSettingLine, formatSettingLine, parseSettings } from 
 let draft = null; // { sortId, baseVersion, name, description, code, savedCode, testValues, source, hours, startMs }
 
 export async function render(root, { params, go }) {
-  await Promise.all([loadSorts(), loadSettings(), loadChannels().catch(() => null)]);
+  await Promise.all([loadSorts(), loadSettings(), loadGlobals(true), loadChannels().catch(() => null)]);
   const wanted = params.get('sort');
   const isNew = wanted === 'new';
   if (wanted && (!draft || isNew || draft.sortId !== Number(wanted))) {
@@ -140,7 +140,7 @@ export async function render(root, { params, go }) {
     if (key !== lastSettingsKey) {
       lastSettingsKey = key;
       clear(testForm, settings.length ? h('div', null, h('span', { class: 'lab' }, 'Test values'),
-        settingsForm({ settings, values: draft.testValues, onChange: v => { draft.testValues = v; } })) : null);
+        settingsForm({ settings, values: draft.testValues, globals: store.globals, onChange: v => { draft.testValues = v; } })) : null);
     }
   }
 
@@ -307,6 +307,7 @@ padWith: filler list =                            // Filler list
         h('span', { class: 'k' }, 'utils.hours(x)'), h('span', null, 'From a weekly hours setting (or an array of them): isInside(t), fractionInside(a, b), msInside(a, b). Pass { hours, padMinutes } to widen blocks.'),
         h('span', { class: 'k' }, 'utils'), h('span', null, 'shuffle(arr, rng), makeRng(seed), scoreSchedule(list)'),
         h('span', { class: 'k' }, 'utils.claude(o)'), h('span', null, '{ apiKey, prompt, model?, system?, maxTokens? } -> Promise<text>. The server makes the call; waiting on it does not count toward the time limit.'),
+        h('span', { class: 'k' }, 'globals'), h('span', null, 'Global variables from the Settings screen, by name (read-only). A setting can also be linked to one per channel.'),
         h('span', { class: 'k' }, 'history'), h('span', null, 'watched(id), lastAired(id): filled in by the Watch Tracker in 2.1 (0 and null until then)'),
         h('span', { class: 'k' }, 'console.log'), h('span', null, 'Shows under the test results')),
       h('h3', null, 'Filler'),

@@ -73,3 +73,17 @@ test('analyzeRepeats uses local time of day and skips flex', () => {
   assert.equal(summary[0].minGapMs, 24 * 3_600_000);
   assert.equal(makeRng(1)(), makeRng(1)()); // seeded
 });
+
+test('settings linked to global variables', async () => {
+  const { settings } = parseSettings(`/* @settings
+apiKey: secret =
+workHours: weekly hours = Mon 09:00-17:00
+order: choice(a, b) = a
+window: number = 48
+*/`);
+  const globals = { key: { type: 'secret', value: 'sk-1' }, hours: { type: 'weekly hours', value: 'Tue 08:00-12:00' }, pick: { type: 'text', value: 'b' }, n: { type: 'text', value: '5' } };
+  const v = resolveValues(settings, { apiKey: { $global: 'key' }, workHours: { $global: 'hours' }, order: { $global: 'pick' }, window: { $global: 'n' } }, globals);
+  // text can't feed a number setting, so window falls back to its default
+  assert.deepEqual(v, { apiKey: 'sk-1', workHours: 'Tue 08:00-12:00', order: 'b', window: 48 });
+  assert.equal(resolveValues(settings, { apiKey: { $global: 'gone' } }, globals).apiKey, '');
+});

@@ -1,6 +1,6 @@
 // Apply & History: every change to a channel's lineup is backed up first
-// (last 20 per channel), can be undone, and is followed by a guide refresh.
-import { config } from './config.ts';
+// (last 20 per channel) and can be undone.
+import { appSetting } from './app-settings.ts';
 import { db } from './db.ts';
 import { forgetChannelData } from './channel-data.ts';
 import { getPreview } from './preview.ts';
@@ -38,8 +38,8 @@ export async function backupChannel(channelId: string, reason: string): Promise<
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .run(channelId, String(ch.name ?? '').trim(), Date.now(), reason, lineup.length, durationMs, Number(ch.startTime) || null,
       JSON.stringify(lineup), prog.schedule ? JSON.stringify(prog.schedule) : null);
-  const keep = db.prepare('SELECT id FROM backups WHERE channel_id = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(channelId, config.backupsPerChannel) as Array<{ id: number }>;
-  if (keep.length >= config.backupsPerChannel) {
+  const keep = db.prepare('SELECT id FROM backups WHERE channel_id = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(channelId, appSetting('backupsPerChannel')) as Array<{ id: number }>;
+  if (keep.length >= appSetting('backupsPerChannel')) {
     db.prepare(`DELETE FROM backups WHERE channel_id = ? AND id NOT IN (${keep.map(() => '?').join(',')})`).run(channelId, ...keep.map(k => k.id));
   }
   return Number(r.lastInsertRowid);
@@ -52,7 +52,7 @@ function log(entry: { channelId: string; channelName: string; action: string; de
       entry.backupId ?? null, entry.ok ? 1 : 0, entry.message);
 }
 
-/** Writes a lineup, sets the start time, refreshes the guide. Returns warnings for the non-fatal steps. */
+/** Writes a lineup and sets the start time. Returns warnings for the non-fatal steps. */
 async function writeChannel(channelId: string, lineup: LineupItem[], startTime: number | null): Promise<string[]> {
   const warnings: string[] = [];
   await tunarr.writeLineup(channelId, lineup);
@@ -62,11 +62,6 @@ async function writeChannel(channelId: string, lineup: LineupItem[], startTime: 
     } catch (err: any) {
       warnings.push(`The lineup was saved, but setting the channel's start time failed, so Tunarr may start the lineup at a different point: ${err.message}`);
     }
-  }
-  try {
-    await tunarr.refreshGuide();
-  } catch (err: any) {
-    warnings.push(`The lineup was saved, but the guide refresh failed (Tunarr will refresh it on its own schedule): ${err.message}`);
   }
   forgetChannelData(channelId);
   return warnings;
@@ -94,7 +89,7 @@ export async function applyPreview(channelId: string, previewId: string, alignSt
 
 export async function restoreBackup(backupId: number, action: 'restore' | 'undo' = 'restore') {
   const b = db.prepare('SELECT * FROM backups WHERE id = ?').get(backupId) as BackupRow | undefined;
-  if (!b) throw new HttpError(404, `Backup ${backupId} not found (only the last ${config.backupsPerChannel} per channel are kept).`);
+  if (!b) throw new HttpError(404, `Backup ${backupId} not found (only the last ${appSetting('backupsPerChannel')} per channel are kept).`);
   return withChannelLock(b.channel_id, async () => {
     const lineup = JSON.parse(b.lineup_json) as LineupItem[];
     const when = new Date(b.created_at).toLocaleString();
@@ -142,7 +137,3 @@ export function listHistory(channelId?: string, limit = 100) {
   return channelId ? db.prepare(sql).all(channelId, limit) : db.prepare(sql).all(limit);
 }
 
-export async function refreshGuide() {
-  await tunarr.refreshGuide();
-  return { ok: true };
-}
