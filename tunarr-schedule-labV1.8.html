@@ -1,0 +1,2083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Schedule Lab — Tunarr Algorithm Playground</title>
+<style>
+  :root{
+    --bg:#0B0E14;
+    --panel:#11151F;
+    --panel-2:#161B27;
+    --line:#232A3B;
+    --text:#D8DEEA;
+    --text-dim:#7C879C;
+    --amber:#FFB454;
+    --amber-dim:#7A5C2E;
+    --cyan:#5CC8FF;
+    --red:#FF5C5C;
+    --green:#5CFFB4;
+    --mono: "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Inter, system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--sans);height:100%;}
+  body{font-size:13px;line-height:1.45;}
+  ::selection{background:var(--amber-dim);}
+  scrollbar-width: thin;
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
+
+  .app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---- Topbar ---- */
+  .topbar{
+    display:flex;align-items:center;gap:14px;
+    padding:10px 16px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, #12161F, #0E1119);
+    flex-shrink:0;
+  }
+  .brand{display:flex;align-items:center;gap:9px;font-family:var(--mono);letter-spacing:.5px;}
+  .brand .dot{width:8px;height:8px;border-radius:50%;background:var(--text-dim);box-shadow:0 0 0 0 rgba(0,0,0,0);}
+  .brand .dot.live{background:var(--green);animation:pulse 1.6s infinite;}
+  .brand .dot.busy{background:var(--amber);animation:pulse 0.8s infinite;}
+  .brand .dot.err{background:var(--red);}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(92,255,180,.55);}70%{box-shadow:0 0 0 6px rgba(92,255,180,0);}100%{box-shadow:0 0 0 0 rgba(92,255,180,0);}}
+  .brand b{font-weight:700;color:#fff;}
+  .brand span.tag{color:var(--text-dim);font-size:11px;}
+  .topbar .spacer{flex:1;}
+  .conn{display:flex;align-items:center;gap:8px;}
+  .conn input[type=text], .conn input[type=password]{
+    background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    font-family:var(--mono);font-size:12px;padding:6px 9px;border-radius:6px;width:220px;
+  }
+  .btn{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;border-radius:6px;
+    border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+    padding:6px 12px;cursor:pointer;transition:.12s;
+  }
+  .btn:hover{border-color:#3A445C;}
+  .btn:active{transform:translateY(1px);}
+  .btn.primary{background:var(--amber);color:#1A1300;border-color:var(--amber);}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.danger{background:var(--red);color:#220707;border-color:var(--red);}
+  .btn.ghost{background:transparent;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn.small{padding:3px 8px;font-size:11px;}
+
+  /* ---- Layout ---- */
+  .layout{flex:1;display:grid;grid-template-columns:250px 6px 1fr 6px 380px;min-height:0;}
+  @media (max-width: 1100px){ .layout{grid-template-columns:1fr;grid-template-rows:auto auto auto;overflow:auto;} .resizer{display:none;} }
+  .resizer{
+    cursor:col-resize;background:transparent;position:relative;
+  }
+  .resizer::after{
+    content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;
+    background:var(--line);transform:translateX(-50%);
+  }
+  .resizer:hover::after, .resizer.active::after{background:var(--cyan);width:2px;}
+
+  .panel{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;}
+  .panel:last-child{border-right:none;}
+  .panel-head{
+    padding:10px 14px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;letter-spacing:1px;color:var(--text-dim);
+    text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;
+  }
+  .panel-body{padding:14px;overflow-y:auto;flex:1;min-height:0;}
+
+  label.field{display:block;margin-bottom:12px;}
+  label.field .lab{display:block;font-size:11px;color:var(--text-dim);margin-bottom:4px;font-family:var(--mono);}
+  label.field input, label.field select, label.field textarea{
+    width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--text);
+    font-family:var(--mono);font-size:12px;padding:7px 9px;border-radius:6px;
+  }
+  label.field input:focus, label.field select:focus, label.field textarea:focus{outline:1px solid var(--cyan);}
+  .row{display:flex;gap:8px;}
+  .row > *{flex:1;}
+
+  .stat{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line);font-family:var(--mono);font-size:11.5px;}
+  .stat .v{color:var(--cyan);}
+  .stat:last-child{border-bottom:none;}
+
+  details{margin-top:10px;border-top:1px solid var(--line);padding-top:10px;}
+  summary{cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--text-dim);letter-spacing:.5px;text-transform:uppercase;}
+
+  /* ---- Tabs ---- */
+  .tabs{display:flex;gap:4px;padding:10px 14px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;}
+  .tab{
+    padding:7px 12px;font-size:12px;font-family:var(--mono);color:var(--text-dim);
+    border:1px solid transparent;border-bottom:none;border-radius:6px 6px 0 0;cursor:pointer;
+  }
+  .tab.active{color:var(--amber);background:var(--panel-2);border-color:var(--line);}
+
+  .editor-wrap{position:relative;flex:1;display:flex;flex-direction:column;min-height:0;}
+  textarea.code{
+    flex:1;width:100%;background:#0A0D14;color:#C9D6E8;border:none;resize:none;
+    font-family:var(--mono);font-size:12.5px;padding:14px;line-height:1.55;tab-size:2;
+  }
+  textarea.code:focus{outline:none;}
+
+  .toolbar{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);flex-wrap:wrap;}
+
+  /* ---- Timeline ---- */
+  .timeline-toggle{display:flex;gap:6px;}
+  .timeline-toggle .btn.active{background:var(--panel-2);border-color:var(--cyan);color:var(--cyan);}
+  .timeline{display:flex;flex-direction:column;flex:1;min-height:0;}
+  .tl-list{flex:1;overflow-y:auto;padding:8px 0;}
+  .tl-row{
+    display:grid;grid-template-columns:108px 4px 1fr auto;gap:10px;align-items:start;
+    padding:7px 14px;border-bottom:1px solid #161A24;font-size:12px;
+  }
+  .tl-row .tc{font-family:var(--mono);color:var(--text-dim);font-size:10.5px;padding-top:2px;line-height:1.4;}
+  .tl-row .bar{height:18px;border-radius:2px;margin-top:1px;}
+  .tl-row .title{overflow:visible;white-space:normal;word-break:break-word;line-height:1.4;}
+  .tl-row .title .show{color:var(--text-dim);margin-right:6px;font-size:11px;}
+  .tl-row .title .ep{font-weight:600;color:var(--text);}
+  .tl-row .mismatch-warn{display:block;margin-top:3px;}
+  .tl-row .meta{margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;}
+  .tl-row .dur{font-family:var(--mono);font-size:10.5px;color:var(--text-dim);padding-top:2px;}
+  .tl-row.is-new{background:rgba(92,255,180,.06);}
+  .tl-row .badge{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:3px;background:var(--green);color:#06150D;margin-left:6px;}
+  .tl-row .badge.diff{background:var(--amber);color:#1A1300;}
+  .tag{font-family:var(--mono);font-size:9.5px;padding:2px 6px;border-radius:3px;border:1px solid var(--line);color:var(--text-dim);white-space:nowrap;}
+  .tag.repeat-tight{background:rgba(255,92,92,.12);border-color:var(--red);color:#FF9494;}
+  .tag.repeat-mid{background:rgba(255,180,84,.12);border-color:var(--amber);color:var(--amber);}
+  .tag.repeat-loose{background:rgba(92,255,180,.10);border-color:var(--green);color:var(--green);}
+  .tag.first-air{background:rgba(92,200,255,.10);border-color:var(--cyan);color:var(--cyan);}
+
+  .rank-table{width:100%;border-collapse:collapse;font-size:11.5px;}
+  .rank-table th{text-align:left;font-family:var(--mono);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;padding:8px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);}
+  .rank-table td{padding:7px 12px;border-bottom:1px solid #161A24;}
+
+  .modal-backdrop{
+    display:none;position:fixed;inset:0;background:rgba(5,7,11,.72);
+    z-index:50;align-items:center;justify-content:center;padding:24px;
+  }
+  .modal-backdrop.open{display:flex;}
+  .modal{
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    width:min(900px, 100%);max-height:90vh;display:flex;flex-direction:column;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal-head{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;
+  }
+  .modal-body{padding:16px;overflow-y:auto;flex:1;min-height:0;}
+  #rankResults table{margin-top:4px;}
+  #rankResults .best-row td{background:rgba(92,255,180,.08);}
+  .rank-table tr.avg-row td{
+    background:#161B27;color:var(--amber);font-weight:600;
+    border-bottom:2px solid var(--line);
+  }
+
+  .rank-table tr:hover td{background:#0E121B;}
+
+  .log{
+    font-family:var(--mono);font-size:11px;color:var(--text-dim);
+    border-top:1px solid var(--line);max-height:140px;overflow-y:auto;padding:8px 14px;background:#0A0D14;
+  }
+  .log .line{margin-bottom:3px;}
+  .log .line.err{color:var(--red);}
+  .log .line.ok{color:var(--green);}
+  .log .line.warn{color:var(--amber);}
+
+  .empty{color:var(--text-dim);font-size:12px;padding:24px 14px;text-align:center;}
+  .empty b{display:block;color:var(--text);margin-bottom:6px;}
+
+  .pill{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:10px;background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);margin-right:4px;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot" id="connDot"></span>
+      <b>SCHEDULE LAB</b><span class="tag">// Tunarr algorithm playground</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="conn">
+      <input type="text" id="tunarrUrl" placeholder="http://localhost:8000" />
+      <button class="btn" id="btnConnect">Connect</button>
+      <button class="btn ghost small" id="btnExportSettings" title="Save your address, field mapping, and layout to a settings file">⬇ Export settings</button>
+      <button class="btn ghost small" id="btnImportSettings" title="Load settings from a previously exported file">⬆ Import settings</button>
+      <input type="file" id="importSettingsInput" accept="application/json" style="display:none;">
+    </div>
+  </div>
+
+  <div class="layout" id="mainLayout">
+
+    <!-- LEFT: connection / channel / pool -->
+    <div class="panel" style="grid-column:1;">
+      <div class="panel-head">Channel</div>
+      <div class="panel-body">
+        <label class="field">
+          <span class="lab">Channel</span>
+          <select id="channelSelect"><option value="">— connect first —</option></select>
+        </label>
+        <div class="row">
+          <button class="btn small" id="btnLoadChannel">Load lineup</button>
+          <button class="btn small ghost" id="btnSample">Sample data</button>
+        </div>
+
+        <div id="poolStats" style="margin-top:16px;"></div>
+
+        <details>
+          <summary>Field mapping</summary>
+          <div style="margin-top:10px;">
+            <label class="field"><span class="lab">id path</span><input type="text" id="map_id" value="id"></label>
+            <label class="field"><span class="lab">show title path</span><input type="text" id="map_show" value="showTitle"></label>
+            <label class="field"><span class="lab">episode title path</span><input type="text" id="map_title" value="title"></label>
+            <label class="field"><span class="lab">season number path (optional)</span><input type="text" id="map_season" value="seasonNumber"></label>
+            <label class="field"><span class="lab">episode number path (optional)</span><input type="text" id="map_episode" value="episodeNumber"></label>
+            <label class="field"><span class="lab">duration (ms) path</span><input type="text" id="map_dur" value="duration"></label>
+            <p style="color:var(--text-dim);font-size:11px;">If your fields don't match, open the raw inspector below to see real key names, then update these dot-paths (e.g. <code>program.title</code>). Leave season/episode blank if your items don't have them — they're optional, used only for the "S02E05" badge.</p>
+          </div>
+        </details>
+
+        <details>
+          <summary>Raw inspector</summary>
+          <div style="margin-top:10px;">
+            <button class="btn small ghost" id="btnShowRawPool">View pool sample JSON</button>
+            <button class="btn small ghost" id="btnShowRawCur" style="margin-top:6px;">View current lineup sample JSON</button>
+            <button class="btn small ghost" id="btnFindAnchor" style="margin-top:6px;">🔎 Find channel's real start-time anchor</button>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Repeat color thresholds</summary>
+          <div style="margin-top:10px;">
+            <label class="field">
+              <span class="lab">Red below (minutes from last airing's time-of-day)</span>
+              <input type="number" id="thresholdTight" value="30" min="0">
+            </label>
+            <label class="field">
+              <span class="lab">Green at or above (minutes)</span>
+              <input type="number" id="thresholdLoose" value="720" min="0">
+            </label>
+            <p style="color:var(--text-dim);font-size:11px;">
+              Below "red" = airing at nearly the same hour as last time (bad). At/above "green" = well-spread
+              out (good). Anything between is amber. Default green threshold is 720m (12h).
+            </p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="resizer" id="resizerLeft" style="grid-column:2;"></div>
+
+    <!-- CENTER: algorithm editor -->
+    <div class="panel" style="grid-column:3;">
+      <div class="tabs" id="tabs"></div>
+      <div class="panel-body" style="padding:14px;display:flex;flex-direction:column;gap:12px;flex:1;">
+        <div class="row">
+          <label class="field" style="flex:1;">
+            <span class="lab">Schedule start</span>
+            <div style="display:flex;gap:6px;">
+              <input type="datetime-local" id="schedStart" style="flex:1;">
+              <button class="btn small ghost" id="btnSchedNow" type="button" title="Reset to right now">⟳ Now</button>
+            </div>
+          </label>
+          <label class="field"><span class="lab">Target duration (hours)</span><input type="number" id="targetHours" value="48" min="1"></label>
+        </div>
+        <div id="paramFields"></div>
+        <div>
+          <button class="btn small ghost" id="btnAddParam">+ Add parameter</button>
+          <div id="addParamForm" style="display:none;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--panel-2);">
+            <div class="row" style="margin-bottom:8px;">
+              <label class="field" style="margin-bottom:0;"><span class="lab">Key (used in code as params.KEY)</span><input type="text" id="newParamKey" placeholder="e.g. speed"></label>
+              <label class="field" style="margin-bottom:0;"><span class="lab">Label</span><input type="text" id="newParamLabel" placeholder="e.g. Speed multiplier"></label>
+            </div>
+            <div class="row" style="margin-bottom:8px;">
+              <label class="field" style="margin-bottom:0;"><span class="lab">Type</span>
+                <select id="newParamType"><option value="number">number</option><option value="text">text</option></select>
+              </label>
+              <label class="field" style="margin-bottom:0;"><span class="lab">Default value</span><input type="text" id="newParamDefault" placeholder="e.g. 1"></label>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn primary small" id="btnConfirmAddParam">Add</button>
+              <button class="btn ghost small" id="btnCancelAddParam">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div class="editor-wrap" style="border:1px solid var(--line);border-radius:8px;overflow:hidden;min-height:220px;">
+          <textarea class="code" id="algoCode" spellcheck="false"></textarea>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn primary" id="btnRun">▶ Run preview</button>
+        <button class="btn ghost" id="btnReset">Reset to preset</button>
+        <button class="btn ghost" id="btnOpenRank">🏆 Rank shuffles</button>
+        <span class="spacer" style="flex:1;"></span>
+        <span class="pill" id="runStatus">idle</span>
+      </div>
+    </div>
+
+    <div class="resizer" id="resizerRight" style="grid-column:4;"></div>
+
+    <!-- RIGHT: timeline + apply -->
+    <div class="panel" style="grid-column:5;">
+      <div class="panel-head">
+        <span>Timeline</span>
+        <div class="timeline-toggle">
+          <button class="btn small active" id="viewPreview">Preview</button>
+          <button class="btn small" id="viewCurrent">Current</button>
+          <button class="btn small" id="viewRanking">Repeat ranking</button>
+        </div>
+      </div>
+      <div class="timeline">
+        <div class="tl-list" id="tlList"><div class="empty"><b>No preview yet</b>Run an algorithm on the left, or load sample data to get started.</div></div>
+      </div>
+      <div style="padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:8px;">
+        <button class="btn danger" id="btnApply" disabled>Apply to channel</button>
+        <button class="btn ghost" id="btnRefreshGuide">🔄 Refresh guide</button>
+        <span class="pill" id="diffPill"></span>
+      </div>
+      <div class="log" id="log"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- RANK SHUFFLES MODAL -->
+<div class="modal-backdrop" id="rankBackdrop">
+  <div class="modal">
+    <div class="modal-head">
+      <span style="font-family:var(--mono);letter-spacing:.5px;color:var(--amber);">🏆 RANK SHUFFLES</span>
+      <button class="btn small ghost" id="btnCloseRank">✕ Close</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text-dim);font-size:12px;margin:0 0 12px;">
+        Runs each checked algorithm multiple times (varying its seed, if it has one) and scores every resulting
+        schedule together in one ranked list. Higher score = better by whatever criteria the scoring function below defines.
+      </p>
+
+      <div style="margin-bottom:12px;">
+        <span class="lab" style="display:block;margin-bottom:6px;">Algorithms to include</span>
+        <div id="rankAlgoChecklist" style="display:flex;flex-wrap:wrap;gap:12px;"></div>
+      </div>
+
+      <div class="row" style="margin-bottom:12px;">
+        <label class="field" style="max-width:180px;"><span class="lab">Candidates per algorithm</span><input type="number" id="rankCandidateCount" value="6" min="2" max="30"></label>
+        <div style="display:flex;align-items:flex-end;gap:8px;">
+          <button class="btn primary" id="btnRunRanking">▶ Generate &amp; rank</button>
+          <button class="btn ghost" id="btnResetScore">Reset scoring to default</button>
+        </div>
+      </div>
+
+      <div class="editor-wrap" style="border:1px solid var(--line);border-radius:8px;overflow:hidden;height:220px;margin-bottom:14px;">
+        <textarea class="code" id="scoreCode" spellcheck="false" style="height:100%;"></textarea>
+      </div>
+
+      <div id="rankResults"><div class="empty"><b>No ranking yet</b>Click "Generate &amp; rank" to score some candidates.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   STATE
+   ========================================================= */
+const state = {
+  tunarrUrl: localStorage.getItem('lab.tunarrUrl') || '',
+  channels: [],
+  selectedChannelId: localStorage.getItem('lab.channelId') || '',
+  rawProgrammingResponse: null,   // raw GET response, kept so we can mirror its shape on POST
+  rawPool: [],                    // raw items (media pool for channel)
+  rawCurrent: [],                 // raw items (current scheduled lineup)
+  pool: [],                       // normalized pool
+  current: [],                    // normalized current lineup
+  preview: null,                  // normalized proposed lineup (after Run)
+  rawPreview: null,
+  view: 'preview',
+};
+
+const PRESET_KEY = 'lab.presets.';
+
+/* =========================================================
+   LOGGING
+   ========================================================= */
+function log(msg, level=''){
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = 'line' + (level ? ' '+level : '');
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `[${t}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function setDot(mode){
+  const d = document.getElementById('connDot');
+  d.className = 'dot' + (mode ? ' '+mode : '');
+}
+
+/* =========================================================
+   UTIL: dot-path getter, duration/time formatting, RNG
+   ========================================================= */
+function getPath(obj, path){
+  if(!obj || !path) return undefined;
+  return path.split('.').reduce((o,k)=> (o && typeof o === 'object' && k in o) ? o[k] : undefined, obj);
+}
+function fmtDur(ms){
+  if(!ms || isNaN(ms)) return '0m';
+  const totalMin = Math.round(ms/60000);
+  const h = Math.floor(totalMin/60), m = totalMin%60;
+  return h ? `${h}h${m?m+'m':''}` : `${m}m`;
+}
+function fmtClock(date){
+  return date.toLocaleString(undefined, {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+function makeRng(seed){
+  let a = seed >>> 0 || 1;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffle(arr, rng=Math.random){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(rng()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+function scoreSchedule(list){
+  let maxStreak=1, streak=1;
+  const shows = new Set();
+  for(let i=0;i<list.length;i++){
+    shows.add(list[i].showTitle);
+    if(i>0 && list[i].showTitle === list[i-1].showTitle){ streak++; maxStreak=Math.max(maxStreak,streak); }
+    else streak=1;
+  }
+  return { maxConsecutiveSameShow:maxStreak, distinctShows:shows.size, count:list.length };
+}
+
+/* =========================================================
+   NORMALIZATION (uses field-mapping panel)
+   ========================================================= */
+function currentMapping(){
+  return {
+    id: document.getElementById('map_id').value || 'id',
+    title: document.getElementById('map_title').value || 'title',
+    show: document.getElementById('map_show').value || 'showTitle',
+    season: document.getElementById('map_season').value || '',
+    episode: document.getElementById('map_episode').value || '',
+    dur: document.getElementById('map_dur').value || 'duration',
+  };
+}
+function pad2(n){ return String(n).padStart(2,'0'); }
+const COMBINED_TITLE_RE = /^(.*?)\s*-\s*S(\d{1,2})E(\d{1,3})\s*-\s*(.*)$/i;
+
+function resolveId(raw, map, idx){
+  return getPath(raw, map.id)
+    ?? getPath(raw, 'programId')
+    ?? getPath(raw, 'program.id')
+    ?? getPath(raw, 'contentId')
+    ?? getPath(raw, 'uuid')
+    ?? `idx-${idx}`;
+}
+
+function normalize(raw, idx, poolLookup, durationHints){
+  const map = currentMapping();
+  const id = resolveId(raw, map, idx);
+
+  let showTitle = getPath(raw, map.show) ?? getPath(raw,'seriesTitle') ?? getPath(raw,'show.title') ?? getPath(raw,'grandparentTitle');
+
+  let title = getPath(raw, map.title)
+    ?? getPath(raw, 'episodeTitle')
+    ?? getPath(raw, 'episode.title')
+    ?? getPath(raw, 'program.title')
+    ?? getPath(raw, 'name');
+
+  let seasonNumber = map.season ? getPath(raw, map.season) : undefined;
+  let episodeNumber = map.episode ? getPath(raw, map.episode) : (getPath(raw,'episodeNumber') ?? undefined);
+
+  // Some libraries store one combined string like
+  // "The Amazing World of Gumball - S04E29 - The Points" in the title
+  // field instead of separate show/season/episode/title fields. If we
+  // don't have a separate show title yet, try to split it out.
+  if(showTitle === undefined && typeof title === 'string'){
+    const m = title.match(COMBINED_TITLE_RE);
+    if(m){
+      showTitle = m[1].trim();
+      if(seasonNumber === undefined) seasonNumber = Number(m[2]);
+      if(episodeNumber === undefined) episodeNumber = Number(m[3]);
+      title = m[4].trim();
+    }
+  }
+
+  let durationMs = getPath(raw, map.dur);
+  if(durationMs === undefined) durationMs = getPath(raw,'durationMs') ?? getPath(raw,'program.duration');
+
+  // Some sources (e.g. a Program/episode metadata record) don't carry a
+  // runtime at all — only the scheduled lineup entry does. If we have
+  // duration hints gathered from the lineup for this id, use those.
+  if(!durationMs && durationHints && durationHints.has(id)){
+    durationMs = durationHints.get(id);
+  }
+
+  // Schedule/lineup entries are often just a reference (id/programId + start
+  // time + duration) with the real episode metadata living in the
+  // pool/programs list. If we couldn't find a title/show locally, resolve
+  // it by looking up this same id in the already-normalized pool.
+  if(poolLookup && poolLookup.has(id)){
+    const matched = poolLookup.get(id);
+    if(title === undefined) title = matched.title;
+    if(showTitle === undefined) showTitle = matched.showTitle;
+    if(seasonNumber === undefined) seasonNumber = matched.seasonNumber;
+    if(episodeNumber === undefined) episodeNumber = matched.episodeNumber;
+    if(!durationMs) durationMs = matched.durationMs;
+  }
+
+  if(title === undefined) title = '(untitled episode)';
+  if(showTitle === undefined) showTitle = '—';
+
+  const hasSE = seasonNumber !== undefined && seasonNumber !== null && episodeNumber !== undefined && episodeNumber !== null;
+  const episodeLabel = hasSE ? `S${pad2(seasonNumber)}E${pad2(episodeNumber)}` : null;
+
+  return { id, title, showTitle, seasonNumber, episodeNumber, episodeLabel, durationMs: Number(durationMs)||0, raw };
+}
+function normalizeAll(rawArr, poolLookup, durationHints){ return rawArr.map((r,i)=>normalize(r,i,poolLookup,durationHints)); }
+
+
+
+/* =========================================================
+   API
+   ========================================================= */
+function apiBase(){
+  return (document.getElementById('tunarrUrl').value || '').replace(/\/+$/,'');
+}
+async function readErrorBody(res){
+  try{
+    const text = await res.text();
+    try{
+      const json = JSON.parse(text);
+      // Tunarr/Zod-style errors are usually { message, issues: [...] } or similar —
+      // surface as much structured detail as we can find.
+      return JSON.stringify(json);
+    }catch(e){
+      return text.slice(0, 2000);
+    }
+  }catch(e){
+    return '(could not read response body)';
+  }
+}
+
+async function apiGet(path){
+  const url = apiBase() + path;
+  const res = await fetch(url, { headers: {'Accept':'application/json'} });
+  if(!res.ok){
+    const body = await readErrorBody(res);
+    throw new Error(`GET ${path} → ${res.status}: ${body}`);
+  }
+  return res.json();
+}
+async function apiPost(path, body){
+  const url = apiBase() + path;
+  const res = await fetch(url, {
+    method:'POST',
+    headers: {'Content-Type':'application/json','Accept':'application/json'},
+    body: JSON.stringify(body),
+  });
+  if(!res.ok){
+    const errBody = await readErrorBody(res);
+    throw new Error(`POST ${path} → ${res.status}: ${errBody}`);
+  }
+  try{ return await res.json(); }catch(e){ return null; }
+}
+
+function extractArray(payload){
+  // GET responses might be a bare array, or {programs:[...]}, {lineup:[...]}, {items:[...]} etc.
+  if(Array.isArray(payload)) return { arr: payload, key: null };
+  if(!payload || typeof payload !== 'object') return { arr: [], key:null };
+  for(const key of ['programs','programming','lineup','items','schedule']){
+    if(Array.isArray(payload[key])) return { arr: payload[key], key };
+  }
+  // fallback: first array-valued key
+  for(const key of Object.keys(payload)){
+    if(Array.isArray(payload[key])) return { arr: payload[key], key };
+  }
+  return { arr: [], key:null };
+}
+
+async function connect(){
+  state.tunarrUrl = document.getElementById('tunarrUrl').value.trim();
+  localStorage.setItem('lab.tunarrUrl', state.tunarrUrl);
+  setDot('busy');
+  log(`Connecting to ${state.tunarrUrl} ...`);
+  try{
+    const data = await apiGet('/api/channels');
+    const { arr } = extractArray(data);
+    state.channels = arr.length ? arr : (data.channels || []);
+    const sel = document.getElementById('channelSelect');
+    sel.innerHTML = '';
+    if(!state.channels.length){
+      sel.innerHTML = '<option value="">No channels found</option>';
+      log('Connected, but no channels were returned.', 'warn');
+    }else{
+      state.channels.forEach(c=>{
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = `${c.number ?? ''} ${c.name ?? c.id}`.trim();
+        sel.appendChild(opt);
+      });
+      if(state.selectedChannelId) sel.value = state.selectedChannelId;
+    }
+    setDot('live');
+    log(`Connected. Found ${state.channels.length} channel(s).`, 'ok');
+  }catch(err){
+    setDot('err');
+    log(`Connection failed: ${err.message}`, 'err');
+    log(`If this is a CORS or mixed-content error, your Tunarr server needs to allow requests from this page's origin, or you should host this file on the same machine/network and access it over the same protocol (http) as Tunarr.`, 'warn');
+  }
+}
+
+/* =========================================================
+   SETTINGS EXPORT / IMPORT
+   Browsers scope localStorage for file:// pages to the file's own path,
+   so a renamed or re-downloaded copy of this HTML file can lose access
+   to previously saved settings. Export/import sidesteps that entirely by
+   moving the settings into an actual file you control.
+   ========================================================= */
+function gatherSettings(){
+  return {
+    tunarrUrl: document.getElementById('tunarrUrl').value.trim(),
+    channelId: document.getElementById('channelSelect').value || '',
+    leftWidth: localStorage.getItem('lab.leftWidth') || '',
+    rightWidth: localStorage.getItem('lab.rightWidth') || '',
+    map_id: document.getElementById('map_id').value,
+    map_title: document.getElementById('map_title').value,
+    map_show: document.getElementById('map_show').value,
+    map_season: document.getElementById('map_season').value,
+    map_episode: document.getElementById('map_episode').value,
+    map_dur: document.getElementById('map_dur').value,
+    thresholdTight: document.getElementById('thresholdTight').value,
+    thresholdLoose: document.getElementById('thresholdLoose').value,
+  };
+}
+
+function exportSettings(){
+  const data = gatherSettings();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'schedule-lab-settings.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  log('Exported settings to schedule-lab-settings.json. Keep that file — use "Import settings" any time you open a renamed or re-downloaded copy of this page.', 'ok');
+}
+
+async function importSettingsFromFile(file){
+  let data;
+  try{
+    data = JSON.parse(await file.text());
+  }catch(err){
+    log(`Could not read settings file: ${err.message}`, 'err');
+    return;
+  }
+
+  if(data.tunarrUrl){
+    document.getElementById('tunarrUrl').value = data.tunarrUrl;
+    localStorage.setItem('lab.tunarrUrl', data.tunarrUrl);
+  }
+  ['map_id','map_title','map_show','map_season','map_episode','map_dur'].forEach(key=>{
+    if(data[key] !== undefined) document.getElementById(key).value = data[key];
+  });
+  if(data.leftWidth) localStorage.setItem('lab.leftWidth', data.leftWidth);
+  if(data.rightWidth) localStorage.setItem('lab.rightWidth', data.rightWidth);
+  if(data.thresholdTight !== undefined){
+    document.getElementById('thresholdTight').value = data.thresholdTight;
+    localStorage.setItem('lab.thresholdTight', data.thresholdTight);
+  }
+  if(data.thresholdLoose !== undefined){
+    document.getElementById('thresholdLoose').value = data.thresholdLoose;
+    localStorage.setItem('lab.thresholdLoose', data.thresholdLoose);
+  }
+  const layout = document.getElementById('mainLayout');
+  const lw = data.leftWidth || localStorage.getItem('lab.leftWidth') || 250;
+  const rw = data.rightWidth || localStorage.getItem('lab.rightWidth') || 380;
+  layout.style.gridTemplateColumns = `${lw}px 6px 1fr 6px ${rw}px`;
+
+  log('Settings imported. Reconnecting...', 'ok');
+  await connect();
+  if(data.channelId && document.getElementById('channelSelect').querySelector(`option[value="${data.channelId}"]`)){
+    document.getElementById('channelSelect').value = data.channelId;
+    state.selectedChannelId = data.channelId;
+    localStorage.setItem('lab.channelId', data.channelId);
+  }
+}
+
+// Tunarr computes the lineup's actual displayed/playing start from some
+// fixed internal anchor on the channel object (most likely "the most
+// recent loop boundary before now", i.e. anchor + N * totalDuration for
+// whatever N makes that boundary the latest one not in the future) — NOT
+// from whatever we set in "Schedule start" here, which only affects this
+// app's own preview math. This scans the channel's real detail object for
+// plausible date/epoch fields, then uses the best candidate plus the
+// loaded lineup's total runtime to compute that same loop boundary and
+// sync our Schedule start to match it.
+async function findChannelAnchor(){
+  if(!state.selectedChannelId){ log('Select and load a channel first.', 'warn'); return; }
+  try{
+    const detail = await apiGet(`/api/channels/${state.selectedChannelId}`);
+    state.rawChannelDetail = detail;
+
+    const candidates = [];
+    for(const [k, v] of Object.entries(detail)){
+      if(typeof v === 'number' && v > 1e12 && v < 1e13){
+        candidates.push({ key:k, raw:v, parsed: new Date(v) });
+      }else if(typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)){
+        const d = new Date(v);
+        if(!isNaN(d.getTime())) candidates.push({ key:k, raw:v, parsed:d });
+      }
+    }
+
+    if(!candidates.length){
+      log(`No obvious date/epoch fields found on the channel object's top level. Opening the raw JSON so you can look for it manually (it may be nested).`, 'warn');
+      alert(JSON.stringify(detail, null, 2).slice(0, 4000));
+      return;
+    }
+
+    log(`Found ${candidates.length} candidate date field(s) on the channel:`);
+    candidates.forEach(c => log(`   ${c.key} = ${c.raw}  →  ${c.parsed.toLocaleString()}`));
+
+    const best = candidates.find(c => /start/i.test(c.key)) || candidates[0];
+    const totalDurationMs = state.current.reduce((a,b)=>a+(b.durationMs||0), 0);
+
+    if(!totalDurationMs){
+      log(`Found a likely anchor field ("${best.key}") but can't compute the real loop-start without the lineup's total runtime — click "Load lineup" first, then re-run this.`, 'warn');
+      return;
+    }
+
+    const anchorMs = best.parsed.getTime();
+    const nowMs = Date.now();
+    const cyclesElapsed = Math.floor((nowMs - anchorMs) / totalDurationMs);
+    const computedLoopStartMs = anchorMs + cyclesElapsed * totalDurationMs;
+    const computedDate = new Date(computedLoopStartMs);
+
+    document.getElementById('schedStart').value = new Date(computedLoopStartMs - computedDate.getTimezoneOffset()*60000).toISOString().slice(0,16);
+    log(`Using "${best.key}" as the channel's anchor and the loaded lineup's total runtime (${fmtDur(totalDurationMs)}) to compute Tunarr's actual current loop-start: ${computedDate.toLocaleString()}. Schedule start has been set to match — re-run your preview now and the dates should line up with what Tunarr's Edit Schedule shows.`, 'ok');
+  }catch(err){
+    log(`Couldn't fetch channel detail: ${err.message}`, 'err');
+  }
+}
+
+async function loadChannelData(){
+  state._warnedMismap = false;
+  const id = document.getElementById('channelSelect').value;
+  if(!id){ log('Select a channel first.', 'warn'); return; }
+  state.selectedChannelId = id;
+  localStorage.setItem('lab.channelId', id);
+  setDot('busy');
+  try{
+    let progData;
+    try{ progData = await apiGet(`/api/channels/${id}/programming`); }
+    catch(e){ progData = await apiGet(`/api/channels/${id}/lineup`); }
+    state.rawProgrammingResponse = progData;
+    const { arr: currentArr } = extractArray(progData);
+    state.rawCurrent = currentArr;
+
+    let poolData;
+    try{ poolData = await apiGet(`/api/channels/${id}/programs`); }
+    catch(e){ poolData = progData; }
+    const { arr: poolArr } = extractArray(poolData);
+    state.rawPool = poolArr.length ? poolArr : currentArr;
+
+    // Build duration hints from the raw lineup BEFORE normalizing the pool —
+    // some Program/episode metadata records carry no runtime at all (only
+    // the scheduled lineup entry does), so we backfill pool durations from
+    // whatever the lineup already knows for that same id.
+    const map = currentMapping();
+    const durationHints = new Map();
+    currentArr.forEach((raw, i)=>{
+      const rid = resolveId(raw, map, i);
+      let dur = getPath(raw, map.dur);
+      if(dur === undefined) dur = getPath(raw,'durationMs') ?? getPath(raw,'program.duration');
+      if(dur && !durationHints.has(rid)) durationHints.set(rid, dur);
+    });
+
+    // Normalize the pool first — it's the source of truth for episode
+    // metadata. Schedule/lineup entries are often just references (id +
+    // start time + duration), so we join them against the pool by id to
+    // fill in title/show/season/episode when the lineup item itself
+    // doesn't carry that data directly.
+    state.pool = normalizeAll(state.rawPool, null, durationHints);
+    const poolLookup = new Map(state.pool.map(p=>[p.id, p]));
+    state.current = normalizeAll(state.rawCurrent, poolLookup);
+
+    const unresolvedCount = state.current.filter(i=>i.title==='(untitled episode)').length;
+    if(unresolvedCount){
+      log(`${unresolvedCount} lineup item(s) still couldn't be resolved against the pool — their id field may not match between the programming and programs endpoints. Check Raw inspector on both to compare id keys.`, 'warn');
+    }
+    const zeroDurationPoolCount = state.pool.filter(p=>!p.durationMs).length;
+    if(zeroDurationPoolCount){
+      log(`${zeroDurationPoolCount} pool item(s) have no resolvable duration (not on the program record or in the lineup) — algorithms that use pool durations may treat these as 0-length.`, 'warn');
+    }
+
+    renderPoolStats();
+    renderTimeline(state.current, state.rawCurrent, 'current view (loaded)');
+    setDot('live');
+    log(`Loaded ${state.current.length} scheduled item(s), ${state.pool.length} pool item(s).`, 'ok');
+  }catch(err){
+    setDot('err');
+    log(`Failed to load channel data: ${err.message}`, 'err');
+  }
+}
+
+// Deep-clones `obj`, replacing any primitive leaf value that exactly
+// equals `oldVal` with `newVal`, anywhere in the structure (including
+// inside arrays/nested objects). Used to turn a real lineup entry into a
+// "template" we can stamp a different program id/duration into, while
+// preserving every other field exactly as Tunarr originally sent it.
+function deepReplaceValue(obj, oldVal, newVal){
+  if(obj === null || typeof obj !== 'object') return obj === oldVal ? newVal : obj;
+  if(Array.isArray(obj)) return obj.map(v => deepReplaceValue(v, oldVal, newVal));
+  const out = {};
+  for(const k in obj){
+    out[k] = deepReplaceValue(obj[k], oldVal, newVal);
+  }
+  return out;
+}
+
+async function applyToChannel(){
+  if(!state.preview || !state.preview.length){ log('Nothing to apply — run a preview first.', 'warn'); return; }
+  const id = state.selectedChannelId;
+  if(!id){ log('No channel selected.', 'warn'); return; }
+
+  const schedStartVal = document.getElementById('schedStart').value;
+  const schedStartMs = schedStartVal ? new Date(schedStartVal).getTime() : Date.now();
+  const staleMs = Date.now() - schedStartMs;
+  if(Math.abs(staleMs) > 5 * 60000){
+    const direction = staleMs > 0 ? 'in the past' : 'in the future';
+    const staleness = fmtDur(Math.abs(staleMs));
+    log(`⚠ "Schedule start" is ${staleness} ${direction} compared to right now. This is almost always a mistake when applying to a live channel — it's probably just gone stale since you loaded the page. Click "⟳ Now" next to the field, then re-run preview and apply.`, 'warn');
+    const proceedAnyway = confirm(`Schedule start is set to ${schedStartVal} — that's ${staleness} ${direction} of the actual current time.\n\nIf this isn't intentional, click Cancel, hit "⟳ Now" next to Schedule start, re-run the preview, and apply again.\n\nProceed anyway?`);
+    if(!proceedAnyway) return;
+  }
+
+  const ok = confirm(`Apply ${state.preview.length} item(s) to channel "${document.getElementById('channelSelect').selectedOptions[0]?.textContent || id}"?\n\nThis will overwrite the current lineup on your live Tunarr instance.`);
+  if(!ok) return;
+
+  let rawList;
+
+  if(state.rawCurrent.length){
+    // Build each new lineup entry from a REAL lineup entry's shape rather
+    // than echoing raw pool/program metadata (which is a different schema
+    // and the most likely cause of a 400 on POST). We cycle through the
+    // available lineup entries as structural templates and substitute in
+    // the new item's id and duration wherever the template's own id/
+    // duration values appear.
+    const map = currentMapping();
+    rawList = state.preview.map((item, i) => {
+      const templateRaw = state.rawCurrent[i % state.rawCurrent.length];
+      const templateId = resolveId(templateRaw, map, i);
+      let templateDur = getPath(templateRaw, map.dur);
+      if(templateDur === undefined) templateDur = getPath(templateRaw,'durationMs') ?? getPath(templateRaw,'program.duration');
+
+      let entry = JSON.parse(JSON.stringify(templateRaw));
+      entry = deepReplaceValue(entry, templateId, item.id);
+      if(templateDur !== undefined && item.durationMs){
+        entry = deepReplaceValue(entry, templateDur, item.durationMs);
+      }
+      return entry;
+    });
+    log(`Built ${rawList.length} lineup entries from your existing schedule's shape (id/duration substituted per item).`, 'ok');
+  }else{
+    // No lineup was ever loaded for this channel (e.g. you only used
+    // Sample Data) — fall back to echoing the raw pool/program objects.
+    // This is much more likely to be rejected by a real Tunarr instance;
+    // load the actual lineup first if you hit a 400 here.
+    log('No real lineup entries were loaded for this channel — falling back to raw pool objects, which may not match what the write endpoint expects.', 'warn');
+    rawList = state.preview.map(item => item.raw);
+  }
+
+  // Tunarr's write endpoint validated with: "body/type Invalid input" — the
+  // request body must be an object with a top-level `type` discriminator
+  // (mirroring the pattern seen on channel creation: {"type":"new", ...}).
+  // We never set this before, which is almost certainly the real cause of
+  // the 400s. "manual" is the most likely value for a hand-curated/replaced
+  // lineup; if Tunarr rejects that specific string, the next error message
+  // will tell us the actual expected value.
+  // The GET response had BOTH `programs` and `lineup` keys (plus `schedule`)
+  // — we don't know which one Tunarr's playback engine actually treats as
+  // authoritative, so update every array-shaped key that looks like a
+  // lineup/program list rather than leaving stale copies sitting in
+  // whichever ones we didn't touch.
+  const ARRAY_KEY_CANDIDATES = ['programs', 'lineup', 'programming', 'items', 'schedule'];
+  let body;
+  const src = state.rawProgrammingResponse;
+  if(src && !Array.isArray(src) && typeof src === 'object'){
+    body = { ...src, type: 'manual' };
+    let touchedAny = false;
+    ARRAY_KEY_CANDIDATES.forEach(k=>{
+      if(Array.isArray(src[k])){ body[k] = rawList; touchedAny = true; }
+    });
+    if(!touchedAny){
+      const { key } = extractArray(src);
+      body[key || 'programs'] = rawList;
+    }
+
+    // `startTimeOffsets` (if present) is a parallel array of cumulative
+    // elapsed-ms offsets — leaving the old one in place would either
+    // mismatch the new lineup's length or just be wrong, so recompute it
+    // from the new items' actual durations.
+    if(Array.isArray(src.startTimeOffsets)){
+      let cum = 0;
+      body.startTimeOffsets = state.preview.map(item=>{
+        const offset = cum;
+        cum += item.durationMs || 0;
+        return offset;
+      });
+    }
+    // Similarly, drop any stale aggregate counters rather than send numbers
+    // that no longer match the lineup we're actually submitting.
+    if('totalPrograms' in src) body.totalPrograms = rawList.length;
+    if('duration' in src && typeof src.duration === 'number'){
+      body.duration = state.preview.reduce((a,b)=>a+(b.durationMs||0), 0);
+    }
+  }else{
+    body = { type: 'manual', programs: rawList };
+  }
+
+  log(`Request body top-level keys: ${Object.keys(body).join(', ')} (type="${body.type}")`);
+  setDot('busy');
+  try{
+    await apiPost(`/api/channels/${id}/programming`, body);
+    log(`Applied ${rawList.length} item(s) to channel.`, 'ok');
+    setDot('live');
+    log(`Programming saved. Tunarr's guide/EPG view may not reflect this immediately — see the "Refresh guide" button below if it looks stale.`);
+  }catch(err){
+    setDot('err');
+    log(`Apply failed: ${err.message}`, 'err');
+    log(`The error above (after the status code) is Tunarr's actual validation message — it should say exactly which field was rejected.`, 'warn');
+  }
+}
+
+// The channel's programming/lineup data and its GUIDE (EPG) are two
+// different things in Tunarr — saving programming doesn't necessarily
+// rebuild the guide immediately (it's normally rebuilt on a schedule, e.g.
+// every few hours). If "Edit Schedule" shows your new order but the guide
+// view doesn't, this is almost certainly why. Tunarr's API exposes
+// GET /api/debug/helpers/build_guide for exactly this.
+async function refreshGuide(channelId){
+  const attempts = [
+    { method:'GET',  path:'/api/debug/helpers/build_guide' },
+    { method:'POST', path:`/api/channels/${channelId}/refresh` },
+    { method:'POST', path:`/api/channels/${channelId}/reload` },
+  ];
+  for(const a of attempts){
+    try{
+      const res = await fetch(apiBase() + a.path, { method: a.method, headers: {'Accept':'application/json'} });
+      if(res.ok){
+        log(`Triggered guide rebuild via ${a.method} ${a.path} — the guide/EPG view should now reflect the new schedule.`, 'ok');
+        return true;
+      }
+    }catch(e){ /* try next candidate */ }
+  }
+  log(`No working guide-refresh endpoint found. Tunarr's documented build_guide helper lives under /api/debug/ and is most likely disabled on standard installs, and there's no other public API trigger for this.`, 'warn');
+  log(`What we know for certain: your programming data IS saved (Edit Schedule reflects it). The guide/EPG just hasn't rebuilt from it yet. Three real options: (1) wait — Tunarr rebuilds the guide on its own periodically, (2) restart Tunarr — guide rebuild runs on startup, (3) check Tunarr's own Settings UI for a manual rebuild action, since some UI actions aren't part of the documented public API. If you're watching through Plex/Jellyfin/Emby's Live TV, also check THEIR guide-refresh setting — they cache Tunarr's XMLTV on their own separate schedule too.`, 'warn');
+  return false;
+}
+
+/* =========================================================
+   SAMPLE DATA (offline testing)
+   ========================================================= */
+function buildSampleData(){
+  const shows = [
+    { name:'Static Avenue', eps:24, dur:22, titles:['Pilot Light','The Long Weekend','Aerial View','Lost Channel','Rerun Season','Static Cling','The Cooldown','Off the Air','Wide Signal','Test Pattern'] },
+    { name:'Bluefin Detectives', eps:18, dur:24, titles:['The Wet Alibi','Tideline','Low Tide Confession','Salt and Static','The Drift Case','Anchor Point','Brackish','Undertow'] },
+    { name:'Cul-de-Sac Theatre', eps:30, dur:21, titles:['Lawn Order','The New Neighbors','Garage Sale Justice','Curbside','Block Party','Sprinkler Wars','The HOA Letter','Trash Day','Porch Light'] },
+  ];
+  const pool = [];
+  shows.forEach(s=>{
+    for(let e=1;e<=s.eps;e++){
+      const season = Math.ceil(e / 10);
+      const epInSeason = e - (season-1)*10;
+      const titlePick = s.titles[(e-1) % s.titles.length] + (e > s.titles.length ? ` Part ${Math.ceil(e/s.titles.length)}` : '');
+      pool.push({
+        id:`s-${s.name}-e${e}`,
+        title: titlePick,
+        showTitle: s.name,
+        seasonNumber: season,
+        episodeNumber: epInSeason,
+        duration:(s.dur*60+Math.floor(Math.random()*120))*1000,
+      });
+    }
+  });
+  state.rawPool = pool;
+  state.rawCurrent = pool.slice(0, 40);
+  state.rawProgrammingResponse = { programs: state.rawCurrent };
+  document.getElementById('map_id').value='id';
+  document.getElementById('map_title').value='title';
+  document.getElementById('map_show').value='showTitle';
+  document.getElementById('map_season').value='seasonNumber';
+  document.getElementById('map_episode').value='episodeNumber';
+  document.getElementById('map_dur').value='duration';
+  state.pool = normalizeAll(state.rawPool);
+  state.current = normalizeAll(state.rawCurrent);
+  renderPoolStats();
+  renderTimeline(state.current, state.rawCurrent, 'current view (sample)');
+  log(`Loaded sample data: ${state.pool.length} pool items across ${shows.length} shows.`, 'ok');
+
+}
+
+/* =========================================================
+   POOL STATS
+   ========================================================= */
+function renderPoolStats(){
+  const el = document.getElementById('poolStats');
+  const totalDur = state.pool.reduce((a,b)=>a+(b.durationMs||0),0);
+  const shows = new Set(state.pool.map(p=>p.showTitle));
+  el.innerHTML = `
+    <div class="stat"><span>Pool items</span><span class="v">${state.pool.length}</span></div>
+    <div class="stat"><span>Distinct shows</span><span class="v">${shows.size}</span></div>
+    <div class="stat"><span>Pool runtime</span><span class="v">${fmtDur(totalDur)}</span></div>
+    <div class="stat"><span>Current lineup</span><span class="v">${state.current.length} items</span></div>
+  `;
+}
+
+/* =========================================================
+   TIMELINE RENDERING + REPEAT ANALYSIS
+   ========================================================= */
+const SHOW_COLORS = ['#5CC8FF','#FFB454','#5CFFB4','#FF8AD8','#C9A0FF','#FF8A65'];
+function colorFor(show){
+  let h=0; for(let i=0;i<show.length;i++) h = (h*31 + show.charCodeAt(i))>>>0;
+  return SHOW_COLORS[h % SHOW_COLORS.length];
+}
+
+// Walks a list in schedule order, tracking when each exact episode (by id)
+// last aired: how long ago (gap) and what time-of-day it aired last time
+// (clock delta, circular over 24h). Returns the list annotated with that
+// info per-occurrence, plus a per-episode summary sorted so the "worst
+// offenders" (episodes that repeat soonest / at nearly the same time of
+// day) come first.
+function analyzeRepeats(list, startDate){
+  const start = startDate ? new Date(startDate).getTime() : Date.now();
+  const lastByKey = new Map();
+  const summaryByKey = new Map();
+  let elapsed = 0;
+  const annotated = list.map(item=>{
+    const key = item.id;
+    const clockMin = Math.floor(((start + elapsed) / 60000) % 1440);
+    const prev = lastByKey.get(key);
+    let gapMs = null, clockDeltaMin = null, occurrence = 1;
+    if(prev){
+      gapMs = elapsed - prev.elapsed;
+      const diff = Math.abs(clockMin - prev.clockMin);
+      clockDeltaMin = Math.min(diff, 1440 - diff);
+      occurrence = prev.occurrence + 1;
+    }
+    lastByKey.set(key, { elapsed, clockMin, occurrence });
+
+    if(!summaryByKey.has(key)) summaryByKey.set(key, { id:key, title:item.title, showTitle:item.showTitle, episodeLabel:item.episodeLabel, count:0, gaps:[], clockDeltas:[] });
+    const s = summaryByKey.get(key);
+    s.count++;
+    if(gapMs!=null) s.gaps.push(gapMs);
+    if(clockDeltaMin!=null) s.clockDeltas.push(clockDeltaMin);
+
+    elapsed += item.durationMs || 0;
+    return { ...item, _occurrence:occurrence, _gapMs:gapMs, _clockDeltaMin:clockDeltaMin };
+  });
+
+  const summary = [...summaryByKey.values()]
+    .filter(s=>s.gaps.length)
+    .map(s=>({
+      ...s,
+      avgGapMs: s.gaps.reduce((a,b)=>a+b,0)/s.gaps.length,
+      minGapMs: Math.min(...s.gaps),
+      avgClockDeltaMin: s.clockDeltas.reduce((a,b)=>a+b,0)/s.clockDeltas.length,
+      minClockDeltaMin: Math.min(...s.clockDeltas),
+    }))
+    .sort((a,b)=> (a.minClockDeltaMin - b.minClockDeltaMin) || (a.minGapMs - b.minGapMs));
+
+  return { annotated, summary };
+}
+
+function getColorThresholds(){
+  const tight = Number(document.getElementById('thresholdTight')?.value);
+  const loose = Number(document.getElementById('thresholdLoose')?.value);
+  return {
+    tight: Number.isFinite(tight) && tight >= 0 ? tight : 30,
+    loose: Number.isFinite(loose) && loose >= 0 ? loose : 720,
+  };
+}
+function repeatTagClass(clockDeltaMin){
+  const { tight, loose } = getColorThresholds();
+  if(clockDeltaMin < tight) return 'repeat-tight';
+  if(clockDeltaMin < loose) return 'repeat-mid';
+  return 'repeat-loose';
+}
+
+function episodeDisplayTitle(item){
+  const label = item.episodeLabel ? `${item.episodeLabel} · ` : '';
+  return `${label}<span class="ep">${escapeHtml(item.title)}</span>`;
+}
+function looksMismapped(item){
+  const a = String(item.title||'').trim().toLowerCase();
+  const b = String(item.showTitle||'').trim().toLowerCase();
+  return a && b && a === b;
+}
+
+function renderTimeline(list, rawList, label){
+  state.lastList = list;
+  const el = document.getElementById('tlList');
+  if(!list || !list.length){
+    el.innerHTML = `<div class="empty"><b>No data</b>${label||'Nothing to show yet.'}</div>`;
+    return;
+  }
+  const startInput = document.getElementById('schedStart').value;
+  const start = startInput ? new Date(startInput) : new Date();
+  const currentIds = new Set(state.current.map(i=>i.id));
+  const { annotated } = analyzeRepeats(list, start);
+
+  const mismappedCount = annotated.filter(looksMismapped).length;
+  if(mismappedCount && !state._warnedMismap){
+    state._warnedMismap = true;
+    log(`Heads up: ${mismappedCount} item(s) have an episode title identical to the show title — your "episode title path" is likely pointing at the wrong field. Open Raw inspector to find the real per-episode field (often episodeTitle, episode.title, or similar) and update the mapping.`, 'warn');
+  }
+
+  let t = start.getTime();
+  let html = '';
+  annotated.forEach((item)=>{
+    const isNew = state.view==='preview' && !currentIds.has(item.id);
+    const clock = new Date(t);
+    const mismapped = looksMismapped(item);
+
+    let metaTags = '';
+    if(item._occurrence === 1){
+      metaTags = `<span class="tag first-air">1st airing</span>`;
+    }else{
+      const cls = repeatTagClass(item._clockDeltaMin);
+      metaTags = `<span class="tag ${cls}">↻ repeats every ${fmtDur(item._gapMs)}</span>` +
+                 `<span class="tag ${cls}">⏰ ${Math.round(item._clockDeltaMin)}m from last airing's time-of-day</span>`;
+    }
+    if(mismapped){
+      metaTags += `<span class="tag repeat-tight mismatch-warn">⚠ episode title = show title — check field mapping</span>`;
+    }
+
+    html += `<div class="tl-row ${isNew?'is-new':''}">
+      <div class="tc">${clock.toLocaleString(undefined,{weekday:'short',month:'numeric',day:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+      <div class="bar" style="background:${colorFor(item.showTitle)}"></div>
+      <div class="title">
+        <div><span class="show">${escapeHtml(item.showTitle)}</span>${episodeDisplayTitle(item)}${isNew?'<span class="badge">NEW</span>':''}</div>
+        <div class="meta">${metaTags}</div>
+      </div>
+      <div class="dur">${fmtDur(item.durationMs)}</div>
+    </div>`;
+    t += (item.durationMs||0);
+  });
+  el.innerHTML = html;
+
+  const totalMs = list.reduce((a,b)=>a+(b.durationMs||0),0);
+  const diffPill = document.getElementById('diffPill');
+  if(state.view==='preview'){
+    const newCount = list.filter(i=>!currentIds.has(i.id)).length;
+    diffPill.textContent = `${list.length} items · ${fmtDur(totalMs)} · ${newCount} new vs current`;
+  }else{
+    diffPill.textContent = `${list.length} items · ${fmtDur(totalMs)}`;
+  }
+}
+
+function renderRepeatRanking(){
+  const el = document.getElementById('tlList');
+  const list = state.lastList;
+  if(!list || !list.length){
+    el.innerHTML = `<div class="empty"><b>No data</b>Run a preview (or load/select "Current") first, then check ranking.</div>`;
+    return;
+  }
+  const startInput = document.getElementById('schedStart').value;
+  const start = startInput ? new Date(startInput) : new Date();
+  const { summary } = analyzeRepeats(list, start);
+
+  const diffPill = document.getElementById('diffPill');
+  diffPill.textContent = `${summary.length} episode(s) repeat 2+ times`;
+
+  if(!summary.length){
+    el.innerHTML = `<div class="empty"><b>No repeats</b>Every episode in this list airs only once — nothing to rank.</div>`;
+    return;
+  }
+
+  let rows = summary.map(s=>`
+    <tr>
+      <td><span class="show" style="color:${colorFor(s.showTitle)}">${escapeHtml(s.showTitle)}</span> ${s.episodeLabel ? s.episodeLabel+' · ' : ''}${escapeHtml(s.title)}</td>
+      <td>${s.count}</td>
+      <td><span class="tag ${repeatTagClass(s.minClockDeltaMin)}">${fmtDur(s.minGapMs)}</span></td>
+      <td>${fmtDur(s.avgGapMs)}</td>
+      <td><span class="tag ${repeatTagClass(s.minClockDeltaMin)}">${Math.round(s.minClockDeltaMin)}m</span></td>
+      <td>${Math.round(s.avgClockDeltaMin)}m</td>
+    </tr>`).join('');
+
+  const mean = arr => arr.reduce((a,b)=>a+b,0) / arr.length;
+  const avgCount = mean(summary.map(s=>s.count));
+  const avgMinGapMs = mean(summary.map(s=>s.minGapMs));
+  const avgAvgGapMs = mean(summary.map(s=>s.avgGapMs));
+  const avgMinClockDeltaMin = mean(summary.map(s=>s.minClockDeltaMin));
+  const avgAvgClockDeltaMin = mean(summary.map(s=>s.avgClockDeltaMin));
+
+  const avgRow = `
+    <tr class="avg-row">
+      <td>📊 Average across ${summary.length} repeating episode(s)</td>
+      <td>${avgCount.toFixed(1)}</td>
+      <td>${fmtDur(avgMinGapMs)}</td>
+      <td>${fmtDur(avgAvgGapMs)}</td>
+      <td>${Math.round(avgMinClockDeltaMin)}m</td>
+      <td>${Math.round(avgAvgClockDeltaMin)}m</td>
+    </tr>`;
+
+  el.innerHTML = `
+    <table class="rank-table">
+      <thead><tr>
+        <th>Episode</th><th>Times aired</th><th>Shortest gap</th><th>Avg gap</th>
+        <th>Closest time-of-day Δ</th><th>Avg time-of-day Δ</th>
+      </tr></thead>
+      <tbody>${avgRow}${rows}</tbody>
+    </table>
+    <p style="color:var(--text-dim);font-size:11px;padding:10px 14px;">
+      Ranked worst-first below the average row: smallest "closest time-of-day Δ" means that episode keeps landing at nearly
+      the same hour on repeat — a sign your shuffle isn't varying air times. Smallest "shortest gap"
+      means it's repeating soonest in absolute time.
+    </p>`;
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+
+
+/* =========================================================
+   ALGORITHM PRESETS
+   Each preset = { params: [...field defs], code: "function run(ctx){...}" }
+   ctx = { pool, current, params, targetMs, scheduleStart, utils:{shuffle,makeRng,scoreSchedule} }
+   run() must return an array of normalized items (or a Promise resolving to one).
+   ========================================================= */
+const PRESETS = {
+  shuffle: {
+    label:'No-repeat shuffle',
+    params:[
+      {key:'repeatWindowHours', label:'Repeat window (hours)', type:'number', default:48},
+      {key:'seed', label:'Random seed', type:'number', default:1},
+    ],
+    code:
+`// Shuffles the pool and fills the target duration while trying not to
+// repeat the same episode within "repeatWindowHours" of itself.
+function run(ctx){
+  const { pool, params, targetMs, utils } = ctx;
+  const windowMs = (params.repeatWindowHours || 48) * 3600000;
+  const rng = utils.makeRng(Number(params.seed) || 1);
+
+  let remaining = utils.shuffle(pool, rng);
+  let cursor = 0;
+  let elapsed = 0;
+  const lastPlayed = new Map();
+  const result = [];
+  let guard = 0;
+  const guardMax = pool.length * 50 + 2000;
+
+  while (elapsed < targetMs && guard < guardMax) {
+    guard++;
+    if (cursor >= remaining.length) {
+      remaining = utils.shuffle(pool, rng);
+      cursor = 0;
+    }
+    const item = remaining[cursor];
+    const key = item.showTitle + '::' + item.title;
+    const last = lastPlayed.get(key);
+    if (last !== undefined && (elapsed - last) < windowMs) {
+      cursor++;
+      continue;
+    }
+    result.push(item);
+    lastPlayed.set(key, elapsed);
+    elapsed += item.durationMs || 0;
+    cursor++;
+  }
+  return result;
+}`
+  },
+
+  fullcycle: {
+    label:'Full cycle',
+    params:[
+      {key:'order', label:'Cycle order: as-listed / shuffle / by-season-episode', type:'text', default:'as-listed'},
+      {key:'seed', label:'Random seed (only used by "shuffle")', type:'number', default:1},
+    ],
+    code:
+`// Guarantees that EVERY item in the pool plays exactly once before
+// anything plays a second time — no time-window math, no probability,
+// just a strict cycle. Once the full pool has played through, a new
+// cycle starts (re-shuffled if order = "shuffle").
+function run(ctx){
+  const { pool, params, targetMs, utils } = ctx;
+  const order = (params.order || 'as-listed').trim();
+  const rng = utils.makeRng(Number(params.seed) || 1);
+
+  function buildCycle(){
+    if (order === 'shuffle') return utils.shuffle(pool, rng);
+    if (order === 'by-season-episode') {
+      return [...pool].sort((a, b) =>
+        (a.showTitle || '').localeCompare(b.showTitle || '') ||
+        (a.seasonNumber || 0) - (b.seasonNumber || 0) ||
+        (a.episodeNumber || 0) - (b.episodeNumber || 0)
+      );
+    }
+    return [...pool]; // as-listed: whatever order the pool/API gave us
+  }
+
+  let queue = buildCycle();
+  let cursor = 0;
+  let elapsed = 0;
+  const result = [];
+
+  while (elapsed < targetMs) {
+    if (cursor >= queue.length) {
+      queue = buildCycle(); // pool exhausted — start a fresh cycle
+      cursor = 0;
+    }
+    const item = queue[cursor];
+    result.push(item);
+    elapsed += item.durationMs || 0;
+    cursor++;
+  }
+  return result;
+}`
+  },
+
+  timeblock: {
+    label:'Time-block insert',
+    params:[
+      {key:'blockStartHour', label:'Block start hour (0-23)', type:'number', default:7},
+      {key:'blockEndHour', label:'Block end hour (0-23)', type:'number', default:8},
+    ],
+    code:
+`// Keeps the existing lineup mostly intact. Any pool item NOT already in
+// the current lineup is treated as "new" and gets slotted into the next
+// occurrence of the configured daily time block, pushing the rest of the
+// schedule later. Outside the block, the original lineup repeats.
+function run(ctx){
+  const { pool, current, params, targetMs } = ctx;
+  const blockStartMin = (Number(params.blockStartHour)||0) * 60;
+  const blockEndMin = (Number(params.blockEndHour)||0) * 60;
+  const currentIds = new Set(current.map(i=>i.id));
+  const newQueue = pool.filter(p=>!currentIds.has(p.id));
+  const base = current.length ? current : pool;
+
+  const result = [];
+  let elapsed = 0;
+  let i = 0;
+  const dayMs = 24*3600000;
+  let guard = 0;
+  const guardMax = (base.length + newQueue.length) * 50 + 2000;
+
+  while (elapsed < targetMs && guard < guardMax) {
+    guard++;
+    const minuteOfDay = Math.floor((elapsed % dayMs) / 60000);
+    const inBlock = minuteOfDay >= blockStartMin && minuteOfDay < blockEndMin;
+    if (inBlock && newQueue.length) {
+      const item = newQueue.shift();
+      result.push(item);
+      elapsed += item.durationMs || 0;
+      continue;
+    }
+    const item = base[i % base.length];
+    result.push(item);
+    elapsed += item.durationMs || 0;
+    i++;
+  }
+  return result;
+}`
+  },
+
+  ai: {
+    label:'AI optimizer',
+    params:[
+      {key:'candidateCount', label:'Candidates to generate', type:'number', default:5},
+      {key:'repeatWindowHours', label:'Repeat window (hours)', type:'number', default:48},
+      {key:'criteria', label:'Scoring criteria (free text)', type:'text', default:'Maximize variety, avoid back-to-back episodes of the same show, prefer spreading shows evenly across the schedule.'},
+      {key:'apiKey', label:'Anthropic API key (optional — leave blank to use local heuristic scoring instead)', type:'password', default:''},
+    ],
+    code:
+`// Generates several candidate no-repeat shuffles, then either:
+//  - sends compact summaries to Claude to pick the best one (if an API
+//    key is provided), or
+//  - falls back to a simple local heuristic (fewest back-to-back repeats,
+//    most distinct shows).
+//
+// NOTE: this calls the Anthropic API directly from your browser using the
+// key you paste above. The key is only kept in memory/localStorage on this
+// page — never sent anywhere except api.anthropic.com.
+async function run(ctx){
+  const { pool, params, targetMs, utils } = ctx;
+  const n = Math.max(1, Number(params.candidateCount) || 5);
+  const windowMs = (Number(params.repeatWindowHours) || 48) * 3600000;
+
+  function shuffleOnce(seed){
+    const rng = utils.makeRng(seed);
+    let remaining = utils.shuffle(pool, rng);
+    let cursor = 0, elapsed = 0;
+    const lastPlayed = new Map();
+    const result = [];
+    let guard = 0;
+    const guardMax = pool.length * 50 + 2000;
+    while (elapsed < targetMs && guard < guardMax) {
+      guard++;
+      if (cursor >= remaining.length) { remaining = utils.shuffle(pool, rng); cursor = 0; }
+      const item = remaining[cursor];
+      const key = item.showTitle + '::' + item.title;
+      const last = lastPlayed.get(key);
+      if (last !== undefined && (elapsed - last) < windowMs) { cursor++; continue; }
+      result.push(item);
+      lastPlayed.set(key, elapsed);
+      elapsed += item.durationMs || 0;
+      cursor++;
+    }
+    return result;
+  }
+
+  const candidates = [];
+  for (let s = 0; s < n; s++) candidates.push(shuffleOnce(1000 + s * 7919));
+  const scored = candidates.map(list => ({ list, metrics: utils.scoreSchedule(list) }));
+
+  if (params.apiKey && params.apiKey.trim()) {
+    const summary = scored.map((c, idx) =>
+      \`Candidate \${idx}: maxConsecutiveSameShow=\${c.metrics.maxConsecutiveSameShow}, distinctShows=\${c.metrics.distinctShows}, sequence=\${c.list.slice(0,25).map(i=>i.showTitle).join(' > ')}\`
+    ).join('\\n');
+    const prompt = \`You are picking the best TV channel schedule ordering out of several candidates.
+Criteria: \${params.criteria}
+
+\${summary}
+
+Respond with ONLY a JSON object like {"index": 0} naming the best candidate index. No other text.\`;
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': params.apiKey.trim(),
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 200,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+      const data = await res.json();
+      const text = (data.content || []).map(b => b.text || '').join('');
+      const match = text.match(/\\{[^}]*\\}/);
+      const idx = match ? (JSON.parse(match[0]).index ?? 0) : 0;
+      return scored[Math.min(idx, scored.length - 1)].list;
+    } catch (e) {
+      console.warn('AI scoring failed, falling back to local heuristic:', e);
+    }
+  }
+
+  scored.sort((a, b) =>
+    (a.metrics.maxConsecutiveSameShow - b.metrics.maxConsecutiveSameShow) ||
+    (b.metrics.distinctShows - a.metrics.distinctShows)
+  );
+  return scored[0].list;
+}`
+  },
+
+  custom: {
+    label:'Custom',
+    params:[
+      {key:'seed', label:'Random seed', type:'number', default:1},
+    ],
+    code:
+`// Blank slate. Write any function run(ctx) that returns an array of
+// items (each item should come from ctx.pool or ctx.current so its .raw
+// reference is preserved for applying back to Tunarr).
+//
+// A "Random seed" field is available above (ctx.params.seed) — use it
+// with ctx.utils.makeRng(seed) for repeatable randomness, and vary it
+// per-candidate when ranking shuffles against each other.
+//
+// Available helpers: ctx.utils.shuffle(arr, rng), ctx.utils.makeRng(seed),
+// ctx.utils.scoreSchedule(list) -> {maxConsecutiveSameShow, distinctShows, count}
+//
+// This is also where you'd add a filler pass later: e.g. walk the
+// returned list and insert filler/bumper items between programs to pad
+// out fixed time slots.
+function run(ctx){
+  const { pool, targetMs } = ctx;
+  let elapsed = 0;
+  const result = [];
+  let i = 0;
+  while (elapsed < targetMs && i < pool.length * 10) {
+    const item = pool[i % pool.length];
+    result.push(item);
+    elapsed += item.durationMs || 0;
+    i++;
+  }
+  return result;
+}`
+  },
+};
+
+let activePreset = 'shuffle';
+
+function renderTabs(){
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  Object.entries(PRESETS).forEach(([key, p])=>{
+    const t = document.createElement('div');
+    t.className = 'tab' + (key===activePreset ? ' active' : '');
+    t.textContent = p.label;
+    t.onclick = ()=>{ activePreset = key; loadPreset(key); renderTabs(); document.getElementById('addParamForm').style.display = 'none'; };
+    tabs.appendChild(t);
+  });
+}
+
+function loadPreset(key){
+  const p = PRESETS[key];
+  const saved = localStorage.getItem(PRESET_KEY + key);
+  document.getElementById('algoCode').value = saved ? JSON.parse(saved).code : p.code;
+  renderParamFields(key, saved ? JSON.parse(saved).values : null);
+}
+
+function getExtraParams(key){
+  try{ return JSON.parse(localStorage.getItem('lab.extraParams.' + key) || '[]'); }catch(e){ return []; }
+}
+function setExtraParams(key, arr){
+  localStorage.setItem('lab.extraParams.' + key, JSON.stringify(arr));
+}
+function allParamDefs(key){
+  return [...PRESETS[key].params, ...getExtraParams(key)];
+}
+
+function renderParamFields(key, savedValues){
+  const defs = allParamDefs(key);
+  const extraKeys = new Set(getExtraParams(key).map(d=>d.key));
+  const container = document.getElementById('paramFields');
+  container.innerHTML = '';
+  if(!defs.length) return;
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.flexWrap = 'wrap';
+  defs.forEach(def=>{
+    const wrap = document.createElement('label');
+    wrap.className = 'field';
+    wrap.style.minWidth = '200px';
+    const val = savedValues && (def.key in savedValues) ? savedValues[def.key] : def.default;
+    const isExtra = extraKeys.has(def.key);
+    const removeBtn = isExtra ? ` <button type="button" class="btn small ghost" data-remove-param="${def.key}" style="padding:0 5px;font-size:10px;">×</button>` : '';
+    wrap.innerHTML = `<span class="lab">${escapeHtml(def.label)}${removeBtn}</span><input data-param="${def.key}" type="${def.type==='number'?'number':(def.type==='password'?'password':'text')}" value="${val !== undefined ? String(val).replace(/"/g,'&quot;') : ''}">`;
+    row.appendChild(wrap);
+  });
+  container.appendChild(row);
+
+  container.querySelectorAll('[data-remove-param]').forEach(btn=>{
+    btn.onclick = (e)=>{
+      e.preventDefault();
+      const k = btn.dataset.removeParam;
+      setExtraParams(key, getExtraParams(key).filter(d=>d.key !== k));
+      renderParamFields(key, readParams(key));
+      log(`Removed parameter "${k}" from ${PRESETS[key].label}.`);
+    };
+  });
+}
+
+function readParams(key){
+  const out = {};
+  document.querySelectorAll('#paramFields [data-param]').forEach(el=>{
+    out[el.dataset.param] = el.type==='number' ? Number(el.value) : el.value;
+  });
+  return out;
+}
+
+function savePresetState(key){
+  localStorage.setItem(PRESET_KEY + key, JSON.stringify({
+    code: document.getElementById('algoCode').value,
+    values: readParams(key),
+  }));
+}
+
+/* =========================================================
+   RUN
+   ========================================================= */
+async function runAlgorithm(){
+  if(!state.pool.length){
+    log('No pool data loaded — connect to Tunarr and load a channel, or click "Sample data".', 'warn');
+    return;
+  }
+  const statusEl = document.getElementById('runStatus');
+  statusEl.textContent = 'running…';
+  savePresetState(activePreset);
+
+  const targetHours = Number(document.getElementById('targetHours').value) || 48;
+  const targetMs = targetHours * 3600000;
+  const params = readParams(activePreset);
+  const code = document.getElementById('algoCode').value;
+
+  const utils = { shuffle, makeRng, scoreSchedule };
+  const ctx = { pool: state.pool, current: state.current, params, targetMs, scheduleStart: document.getElementById('schedStart').value, utils };
+
+  try{
+    const fn = new Function(`${code}\nreturn run;`)();
+    const t0 = performance.now();
+    let result = fn(ctx);
+    if(result instanceof Promise) result = await result;
+    const t1 = performance.now();
+    if(!Array.isArray(result)) throw new Error('run() must return an array');
+
+    state.preview = result;
+    state.rawPreview = result.map(i=>i.raw);
+    const metrics = scoreSchedule(result);
+    statusEl.textContent = `done in ${Math.round(t1-t0)}ms`;
+    log(`Preview generated: ${result.length} items, ${fmtDur(result.reduce((a,b)=>a+(b.durationMs||0),0))}, max same-show streak ${metrics.maxConsecutiveSameShow}, ${metrics.distinctShows} distinct shows.`, 'ok');
+    state.view = 'preview';
+    setViewToggle();
+    renderTimeline(state.preview, state.rawPreview);
+    document.getElementById('btnApply').disabled = !state.selectedChannelId;
+  }catch(err){
+    statusEl.textContent = 'error';
+    log(`Algorithm error: ${err.message}`, 'err');
+  }
+}
+
+/* =========================================================
+   SHUFFLE RANKING
+   Generates several candidate schedules from the currently-loaded
+   algorithm and scores each one with a user-editable scoring function.
+   ========================================================= */
+const SCORE_CODE_KEY = 'lab.scoreCode';
+
+const DEFAULT_SCORE_CODE =
+`// Scores ONE candidate schedule. Higher = better.
+// ctx.list            — the full ordered schedule (normalized items)
+// ctx.repeatSummary    — per-episode repeat stats: [{ id, title, showTitle,
+//                         count, avgGapMs, minGapMs, avgClockDeltaMin,
+//                         minClockDeltaMin }, ...] (only items that repeat)
+// ctx.neighborOverlaps — flat array of 0/1/2 values: how many of an
+//                         episode's neighbors (the item right before and
+//                         right after it) were the SAME the last time it
+//                         aired. 0 = totally fresh context, 2 = it's
+//                         airing in the exact same sandwich as before.
+// ctx.targetHours      — the schedule length this candidate was built for
+//
+// Must return { total: number, breakdown: { label: value, ... } }
+function score(ctx){
+  const { repeatSummary, neighborOverlaps, targetHours } = ctx;
+
+  if (!repeatSummary.length) {
+    // Nothing repeats at all within this window — best possible outcome.
+    return { total: 1000, breakdown: {
+      'avg gap (h)': targetHours, 'avg time-of-day Δ (m)': 720,
+      'avg closest Δ (m)': 720, 'worst Δ (m)': 720, 'avg neighbor overlap': 0,
+    } };
+  }
+
+  const avgGapHours = repeatSummary.reduce((a,s)=>a+s.avgGapMs,0) / repeatSummary.length / 3600000;
+  const avgClockDeltaMin = repeatSummary.reduce((a,s)=>a+s.avgClockDeltaMin,0) / repeatSummary.length;
+
+  // "Closest call" per episode: each episode's OWN nearest repeat to the
+  // same time of day, averaged across episodes — catches schedules where
+  // the average looks fine but individual episodes still land close.
+  const avgMinClockDeltaMin = repeatSummary.reduce((a,s)=>a+s.minClockDeltaMin,0) / repeatSummary.length;
+
+  // The single worst offender in this whole candidate — whichever episode
+  // repeated closest to its own previous time-of-day, anywhere in the
+  // schedule. One bad repeat here is very noticeable to a viewer, so it's
+  // weighted heavily even if everything else about the schedule is fine.
+  const worstClockDeltaMin = Math.min(...repeatSummary.map(s=>s.minClockDeltaMin));
+
+  const avgNeighborOverlap = neighborOverlaps.length
+    ? neighborOverlaps.reduce((a,b)=>a+b,0) / neighborOverlaps.length
+    : 0;
+
+  // Weights are arbitrary starting points — tune freely for your use case.
+  // Reward long gaps and large time-of-day shifts (both on average AND at
+  // the closest/worst point); punish repeating next to the same neighbors.
+  const total =
+    (avgGapHours * 1) +
+    (avgClockDeltaMin / 60 * 2) +
+    (avgMinClockDeltaMin / 60 * 2) +
+    (worstClockDeltaMin / 60 * 3) -
+    (avgNeighborOverlap * 10);
+
+  return {
+    total,
+    breakdown: {
+      'avg gap (h)': avgGapHours.toFixed(1),
+      'avg time-of-day Δ (m)': Math.round(avgClockDeltaMin),
+      'avg closest Δ (m)': Math.round(avgMinClockDeltaMin),
+      'worst Δ (m)': Math.round(worstClockDeltaMin),
+      'avg neighbor overlap': avgNeighborOverlap.toFixed(2),
+      'episodes that repeat': repeatSummary.length,
+    },
+  };
+}`;
+
+// For each episode that airs 2+ times, how many of its neighbors (the
+// item immediately before/after it in the list) match between this
+// occurrence and the previous one. Returns a flat array of overlap
+// counts (0, 1, or 2) — one entry per repeat occurrence (not per first
+// airing, since a first airing has nothing to compare against).
+function computeNeighborOverlaps(list){
+  const positionsByKey = new Map();
+  list.forEach((item, idx)=>{
+    if(!positionsByKey.has(item.id)) positionsByKey.set(item.id, []);
+    positionsByKey.get(item.id).push(idx);
+  });
+  const overlaps = [];
+  positionsByKey.forEach((idxs)=>{
+    for(let k=1;k<idxs.length;k++){
+      const prevIdx = idxs[k-1], curIdx = idxs[k];
+      const prevNeighbors = new Set([list[prevIdx-1]?.id, list[prevIdx+1]?.id].filter(v=>v!==undefined));
+      const curNeighbors = new Set([list[curIdx-1]?.id, list[curIdx+1]?.id].filter(v=>v!==undefined));
+      let overlap = 0;
+      curNeighbors.forEach(n=>{ if(prevNeighbors.has(n)) overlap++; });
+      overlaps.push(overlap);
+    }
+  });
+  return overlaps;
+}
+
+function loadScoreCode(){
+  const saved = localStorage.getItem(SCORE_CODE_KEY);
+  document.getElementById('scoreCode').value = saved || DEFAULT_SCORE_CODE;
+}
+function saveScoreCode(){
+  localStorage.setItem(SCORE_CODE_KEY, document.getElementById('scoreCode').value);
+}
+
+let lastRankedCandidates = [];
+
+function renderRankAlgoChecklist(){
+  const container = document.getElementById('rankAlgoChecklist');
+  container.innerHTML = Object.entries(PRESETS).map(([key,p])=>`
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-dim);cursor:pointer;">
+      <input type="checkbox" id="rankInclude_${key}" style="accent-color:var(--amber);width:14px;height:14px;">
+      ${escapeHtml(p.label)}
+    </label>`).join('');
+}
+
+// Loads the code+params to use for a given preset key when ranking: prefer
+// whatever's saved (including any unsaved-but-just-ran edits for the
+// currently active tab), falling back to the built-in preset defaults.
+function loadAlgoForRanking(key){
+  const saved = localStorage.getItem(PRESET_KEY + key);
+  const parsed = saved ? JSON.parse(saved) : null;
+  const code = parsed ? parsed.code : PRESETS[key].code;
+  const defaults = Object.fromEntries(PRESETS[key].params.map(p=>[p.key, p.default]));
+  const params = parsed && parsed.values ? { ...defaults, ...parsed.values } : defaults;
+  return { code, params };
+}
+
+async function runRanking(){
+  if(!state.pool.length){
+    log('No pool data loaded — connect to Tunarr and load a channel, or click "Sample data".', 'warn');
+    return;
+  }
+  const resultsEl = document.getElementById('rankResults');
+  resultsEl.innerHTML = `<div class="empty"><b>Running…</b>Generating and scoring candidates.</div>`;
+  saveScoreCode();
+  savePresetState(activePreset); // make sure unsaved edits to the active tab are included
+
+  const selectedKeys = Object.keys(PRESETS).filter(k => document.getElementById('rankInclude_'+k)?.checked);
+  if(!selectedKeys.length){
+    resultsEl.innerHTML = `<div class="empty"><b>No algorithms selected</b>Check at least one algorithm above to rank.</div>`;
+    return;
+  }
+
+  const n = Math.max(2, Math.min(30, Number(document.getElementById('rankCandidateCount').value) || 6));
+  const targetHours = Number(document.getElementById('targetHours').value) || 48;
+  const targetMs = targetHours * 3600000;
+  const scheduleStart = document.getElementById('schedStart').value;
+  const scoreCode = document.getElementById('scoreCode').value;
+  const utils = { shuffle, makeRng, scoreSchedule };
+
+  let scoreFn;
+  try{
+    scoreFn = new Function(`${scoreCode}\nreturn score;`)();
+  }catch(err){
+    resultsEl.innerHTML = `<div class="empty"><b>Scoring code error</b>${escapeHtml(err.message)}</div>`;
+    return;
+  }
+
+  const candidates = [];
+  let globalIndex = 0;
+  const noSeedWarnings = [];
+
+  for(const key of selectedKeys){
+    const label = PRESETS[key].label;
+    const { code, params: baseParams } = loadAlgoForRanking(key);
+
+    let algoFn;
+    try{
+      algoFn = new Function(`${code}\nreturn run;`)();
+    }catch(err){
+      candidates.push({ index: globalIndex++, label, error: `code error: ${err.message}` });
+      continue;
+    }
+
+    const hasSeedParam = 'seed' in baseParams;
+    const runsForThisAlgo = hasSeedParam ? n : 1;
+    if(!hasSeedParam) noSeedWarnings.push(label);
+
+    for(let i=0;i<runsForThisAlgo;i++){
+      const params = { ...baseParams };
+      if(hasSeedParam) params.seed = (Number(baseParams.seed) || 1) + i * 7919;
+      const ctx = { pool: state.pool, current: state.current, params, targetMs, scheduleStart, utils };
+      try{
+        let list = algoFn(ctx);
+        if(list instanceof Promise) list = await list;
+        if(!Array.isArray(list)) throw new Error('run() did not return an array');
+
+        const { summary } = analyzeRepeats(list, scheduleStart ? new Date(scheduleStart) : new Date());
+        const neighborOverlaps = computeNeighborOverlaps(list);
+        const scoreCtx = { list, repeatSummary: summary, neighborOverlaps, targetHours, utils };
+        const scored = scoreFn(scoreCtx);
+        candidates.push({ index: globalIndex++, label, seedUsed: hasSeedParam ? params.seed : null, list, score: scored.total, breakdown: scored.breakdown });
+      }catch(err){
+        candidates.push({ index: globalIndex++, label, error: err.message });
+      }
+    }
+  }
+
+  if(noSeedWarnings.length){
+    log(`Note: ${noSeedWarnings.join(', ')} ${noSeedWarnings.length>1?'have':'has'} no "seed" param, so only one candidate was generated per algorithm rather than ${n} — add a seed param for meaningful variation.`, 'warn');
+  }
+
+  candidates.sort((a,b)=>{
+    if(a.error) return 1;
+    if(b.error) return -1;
+    return b.score - a.score;
+  });
+  lastRankedCandidates = candidates;
+  renderRankingResults(candidates);
+}
+
+function renderRankingResults(candidates){
+  const el = document.getElementById('rankResults');
+  const breakdownKeys = [];
+  candidates.forEach(c=>{ if(c.breakdown) Object.keys(c.breakdown).forEach(k=>{ if(!breakdownKeys.includes(k)) breakdownKeys.push(k); }); });
+
+  const rows = candidates.map((c, rank)=>{
+    if(c.error){
+      return `<tr><td>${escapeHtml(c.label||'')} #${c.index}</td><td colspan="${breakdownKeys.length+2}" style="color:var(--red);">Error: ${escapeHtml(c.error)}</td></tr>`;
+    }
+    const cells = breakdownKeys.map(k=>`<td>${c.breakdown[k] ?? '—'}</td>`).join('');
+    return `<tr class="${rank===0?'best-row':''}">
+      <td>${rank===0?'🏆 ':''}<span style="color:var(--cyan);">${escapeHtml(c.label||'')}</span> #${c.index}${c.seedUsed!=null?` <span style="color:var(--text-dim);">(seed ${c.seedUsed})</span>`:''}</td>
+      <td style="font-family:var(--mono);color:var(--cyan);">${c.score.toFixed(2)}</td>
+      ${cells}
+      <td><button class="btn small" data-load-candidate="${c.index}">Load as preview</button></td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table class="rank-table">
+      <thead><tr><th>Candidate</th><th>Score</th>${breakdownKeys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}<th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  el.querySelectorAll('[data-load-candidate]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const idx = Number(btn.dataset.loadCandidate);
+      const candidate = lastRankedCandidates.find(c=>c.index===idx);
+      if(!candidate || candidate.error) return;
+      state.preview = candidate.list;
+      state.rawPreview = candidate.list.map(i=>i.raw);
+      state.view = 'preview';
+      setViewToggle();
+      renderTimeline(state.preview, state.rawPreview);
+      document.getElementById('btnApply').disabled = !state.selectedChannelId;
+      closeRankModal();
+      log(`Loaded ranked candidate "${candidate.label}" #${idx} (score ${candidate.score.toFixed(2)}) into preview.`, 'ok');
+    };
+  });
+}
+
+function openRankModal(){
+  document.getElementById('rankBackdrop').classList.add('open');
+  Object.keys(PRESETS).forEach(key=>{
+    const cb = document.getElementById('rankInclude_'+key);
+    if(cb) cb.checked = (key === activePreset);
+  });
+}
+function closeRankModal(){ document.getElementById('rankBackdrop').classList.remove('open'); }
+
+function setViewToggle(){
+  document.getElementById('viewPreview').classList.toggle('active', state.view==='preview');
+  document.getElementById('viewCurrent').classList.toggle('active', state.view==='current');
+  document.getElementById('viewRanking').classList.toggle('active', state.view==='ranking');
+}
+
+/* =========================================================
+   WIRE UP
+   ========================================================= */
+document.getElementById('tunarrUrl').value = state.tunarrUrl;
+document.getElementById('tunarrUrl').addEventListener('change', ()=>{
+  localStorage.setItem('lab.tunarrUrl', document.getElementById('tunarrUrl').value.trim());
+});
+document.getElementById('tunarrUrl').addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ localStorage.setItem('lab.tunarrUrl', document.getElementById('tunarrUrl').value.trim()); connect(); }
+});
+document.getElementById('schedStart').value = new Date(Date.now() - (new Date().getTimezoneOffset()*60000)).toISOString().slice(0,16);
+
+const savedTight = localStorage.getItem('lab.thresholdTight');
+const savedLoose = localStorage.getItem('lab.thresholdLoose');
+if(savedTight !== null) document.getElementById('thresholdTight').value = savedTight;
+if(savedLoose !== null) document.getElementById('thresholdLoose').value = savedLoose;
+['thresholdTight','thresholdLoose'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{
+    localStorage.setItem('lab.'+id, document.getElementById(id).value);
+    if(state.view === 'ranking'){ renderRepeatRanking(); }
+    else{ renderTimeline(state.view==='preview' && state.preview ? state.preview : state.current, null); }
+    log('Repeat color thresholds updated.');
+  });
+});
+
+document.getElementById('btnConnect').onclick = connect;
+document.getElementById('btnExportSettings').onclick = exportSettings;
+document.getElementById('btnImportSettings').onclick = ()=> document.getElementById('importSettingsInput').click();
+document.getElementById('importSettingsInput').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(file) importSettingsFromFile(file);
+  e.target.value = '';
+});
+document.getElementById('btnLoadChannel').onclick = loadChannelData;
+document.getElementById('btnSample').onclick = buildSampleData;
+document.getElementById('btnRun').onclick = runAlgorithm;
+document.getElementById('btnApply').onclick = applyToChannel;
+document.getElementById('btnSchedNow').onclick = ()=>{
+  document.getElementById('schedStart').value = new Date(Date.now() - (new Date().getTimezoneOffset()*60000)).toISOString().slice(0,16);
+  log('Schedule start reset to right now.');
+};
+document.getElementById('btnRefreshGuide').onclick = ()=>{
+  if(!state.selectedChannelId){ log('Select a channel first.', 'warn'); return; }
+  refreshGuide(state.selectedChannelId);
+};
+document.getElementById('btnReset').onclick = ()=>{ localStorage.removeItem(PRESET_KEY+activePreset); loadPreset(activePreset); log(`Reset "${PRESETS[activePreset].label}" to default preset.`); };
+
+document.getElementById('btnAddParam').onclick = ()=>{
+  document.getElementById('addParamForm').style.display = 'block';
+};
+document.getElementById('btnCancelAddParam').onclick = ()=>{
+  document.getElementById('addParamForm').style.display = 'none';
+};
+document.getElementById('btnConfirmAddParam').onclick = ()=>{
+  const key = document.getElementById('newParamKey').value.trim();
+  const label = document.getElementById('newParamLabel').value.trim() || key;
+  const type = document.getElementById('newParamType').value;
+  const defaultRaw = document.getElementById('newParamDefault').value;
+
+  if(!key){ log('Parameter key is required.', 'warn'); return; }
+  if(!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)){ log('Parameter key must be a valid identifier — letters, numbers, underscore, not starting with a digit.', 'warn'); return; }
+  if(allParamDefs(activePreset).some(d=>d.key === key)){ log(`A parameter named "${key}" already exists on ${PRESETS[activePreset].label}.`, 'warn'); return; }
+
+  const defaultValue = type === 'number' ? (Number(defaultRaw) || 0) : defaultRaw;
+  const extra = getExtraParams(activePreset);
+  extra.push({ key, label, type, default: defaultValue });
+  setExtraParams(activePreset, extra);
+  renderParamFields(activePreset, readParams(activePreset));
+
+  document.getElementById('newParamKey').value = '';
+  document.getElementById('newParamLabel').value = '';
+  document.getElementById('newParamDefault').value = '';
+  document.getElementById('addParamForm').style.display = 'none';
+  log(`Added parameter "${key}" to ${PRESETS[activePreset].label} — reference it in your code as params.${key}.`, 'ok');
+};
+
+document.getElementById('btnOpenRank').onclick = openRankModal;
+document.getElementById('btnCloseRank').onclick = closeRankModal;
+document.getElementById('rankBackdrop').addEventListener('click', (e)=>{ if(e.target.id === 'rankBackdrop') closeRankModal(); });
+document.getElementById('btnRunRanking').onclick = runRanking;
+document.getElementById('btnResetScore').onclick = ()=>{ localStorage.removeItem(SCORE_CODE_KEY); loadScoreCode(); log('Reset scoring function to default.'); };
+
+document.getElementById('viewPreview').onclick = ()=>{ state.view='preview'; setViewToggle(); if(state.preview) renderTimeline(state.preview, state.rawPreview); };
+document.getElementById('viewCurrent').onclick = ()=>{ state.view='current'; setViewToggle(); renderTimeline(state.current, state.rawCurrent); };
+document.getElementById('viewRanking').onclick = ()=>{ state.view='ranking'; setViewToggle(); renderRepeatRanking(); };
+
+document.getElementById('btnShowRawPool').onclick = ()=>{
+  if(!state.rawPool.length){ log('No pool loaded yet.', 'warn'); return; }
+  alert(JSON.stringify(state.rawPool[0], null, 2).slice(0, 4000));
+};
+document.getElementById('btnShowRawCur').onclick = ()=>{
+  if(!state.rawCurrent.length){ log('No current lineup loaded yet.', 'warn'); return; }
+  alert(JSON.stringify(state.rawCurrent[0], null, 2).slice(0, 4000));
+};
+document.getElementById('btnFindAnchor').onclick = findChannelAnchor;
+
+['map_id','map_title','map_show','map_season','map_episode','map_dur'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{
+    const map = currentMapping();
+    const durationHints = new Map();
+    state.rawCurrent.forEach((raw, i)=>{
+      const rid = resolveId(raw, map, i);
+      let dur = getPath(raw, map.dur);
+      if(dur === undefined) dur = getPath(raw,'durationMs') ?? getPath(raw,'program.duration');
+      if(dur && !durationHints.has(rid)) durationHints.set(rid, dur);
+    });
+    state.pool = normalizeAll(state.rawPool, null, durationHints);
+    const poolLookup = new Map(state.pool.map(p=>[p.id, p]));
+    state.current = normalizeAll(state.rawCurrent, poolLookup);
+    renderPoolStats();
+    if(state.view === 'ranking'){ renderRepeatRanking(); }
+    else{ renderTimeline(state.view==='preview' && state.preview ? state.preview : state.current, null); }
+    log('Field mapping updated, data re-normalized.');
+  });
+});
+
+/* =========================================================
+   RESIZABLE PANELS
+   ========================================================= */
+function setupResizer(handleEl, { storageKey, defaultPx, min, max, side }){
+  const layout = document.getElementById('mainLayout');
+  let widthPx = Number(localStorage.getItem(storageKey)) || defaultPx;
+
+  function applyWidths(){
+    const leftW = side==='left' ? widthPx : (Number(localStorage.getItem('lab.leftWidth')) || 250);
+    const rightW = side==='right' ? widthPx : (Number(localStorage.getItem('lab.rightWidth')) || 380);
+    layout.style.gridTemplateColumns = `${leftW}px 6px 1fr 6px ${rightW}px`;
+  }
+  applyWidths();
+
+  let dragging = false, startX = 0, startWidth = 0;
+  handleEl.addEventListener('mousedown', (e)=>{
+    dragging = true; startX = e.clientX; startWidth = widthPx;
+    handleEl.classList.add('active');
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e)=>{
+    if(!dragging) return;
+    const delta = side==='left' ? (e.clientX - startX) : -(e.clientX - startX);
+    widthPx = Math.max(min, Math.min(max, startWidth + delta));
+    applyWidths();
+  });
+  window.addEventListener('mouseup', ()=>{
+    if(!dragging) return;
+    dragging = false;
+    handleEl.classList.remove('active');
+    document.body.style.userSelect = '';
+    localStorage.setItem(storageKey, String(Math.round(widthPx)));
+  });
+}
+setupResizer(document.getElementById('resizerLeft'), { storageKey:'lab.leftWidth', defaultPx:250, min:200, max:420, side:'left' });
+setupResizer(document.getElementById('resizerRight'), { storageKey:'lab.rightWidth', defaultPx:380, min:280, max:640, side:'right' });
+
+renderTabs();
+renderRankAlgoChecklist();
+loadPreset(activePreset);
+loadScoreCode();
+log('Schedule Lab ready. Connect to Tunarr, or click "Sample data" to try algorithms offline first.');
+
+if(state.tunarrUrl){
+  log(`Remembered address ${state.tunarrUrl} — auto-connecting...`);
+  connect();
+}
+</script>
+</body>
+</html>

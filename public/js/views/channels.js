@@ -1,0 +1,181 @@
+// Channels: each channel's pool, its assigned library sort and version, its
+// own values for that sort's settings, and how long a lineup to build.
+import { api, busy, clear, fmtDur, fmtWhen, h, toast } from '../ui.js';
+import { channelLabel, findSort, loadChannelData, loadChannels, loadSorts, selectChannel, store } from '../store.js';
+import { settingsForm } from '../components/settings-form.js';
+import { parseSettings } from '/shared/sort-settings.js';
+
+export async function render(root, { go }) {
+  const listBody = h('div', { class: 'panel-body', style: { padding: 0 } });
+  const detail = h('div', { class: 'panel' });
+  const filter = h('input', { type: 'text', placeholder: 'Filter channels…', style: { width: '100%' } });
+  clear(root, h('div', { class: 'screen two' },
+    h('div', { class: 'panel' },
+      h('div', { class: 'panel-head' }, h('span', null, 'Tunarr channels'),
+        h('button', { class: 'btn small ghost', onclick: e => busy(e.currentTarget, async () => { await loadChannels(true); drawList(); }) }, 'Reload')),
+      h('div', { style: { padding: '8px 10px', borderBottom: '1px solid var(--line)' } }, filter),
+      listBody),
+    detail));
+
+  let channels = [];
+  try {
+    [channels] = await Promise.all([loadChannels(), loadSorts()]);
+  } catch (err) {
+    clear(listBody, h('div', { class: 'empty' }, h('b', null, "Couldn't load channels"), err.message));
+    return;
+  }
+  channels = store.channels;
+
+  function drawList() {
+    const q = filter.value.trim().toLowerCase();
+    clear(listBody, h('div', { class: 'list' }, store.channels
+      .filter(c => !q || `${c.number} ${c.name} ${c.sortName || ''}`.toLowerCase().includes(q))
+      .map(c => {
+        const outdated = c.setup.sortVersion && c.latestVersion && c.setup.sortVersion < c.latestVersion;
+        return h('div', { class: `list-item${c.id === store.selectedChannelId ? ' active' : ''}`, onclick: () => { selectChannel(c.id); drawList(); drawDetail(); } },
+          h('span', { class: 'num' }, c.number),
+          h('div', { style: { flex: 1, minWidth: 0 } },
+            h('div', { class: 'name' }, c.name),
+            h('div', { class: 'sub' }, c.sortName ? `${c.sortName} v${c.setup.sortVersion}` : 'no sort assigned')),
+          outdated ? h('span', { class: 'pill warn', title: `v${c.latestVersion} is available` }, 'update') : null);
+      })));
+  }
+  filter.addEventListener('input', drawList);
+
+  async function drawDetail() {
+    const ch = store.channels.find(c => c.id === store.selectedChannelId);
+    if (!ch) {
+      clear(detail, h('div', { class: 'panel-head' }, 'Channel'),
+        h('div', { class: 'empty' }, h('b', null, 'Pick a channel'), 'Choose a channel on the left to set its sort and settings.'));
+      return;
+    }
+    const setup = structuredClone(ch.setup);
+    let dirty = false;
+    let settings = [];
+    const saveBtn = h('button', { class: 'btn primary', disabled: true }, 'Save');
+    const markDirty = () => { dirty = true; saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; };
+
+    const lineupCard = h('div', { class: 'card' }, h('h3', null, 'On Tunarr now'), h('div', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
+    const sortCard = h('div', { class: 'card' });
+    const settingsCard = h('div', { class: 'card' });
+
+    clear(detail,
+      h('div', { class: 'panel-head' }, h('span', null, channelLabel(ch)),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn small', onclick: () => go('preview', { channel: ch.id, run: '1' }), disabled: !setup.sortId, title: setup.sortId ? '' : 'Assign a sort first' }, 'Preview this channel'))),
+      h('div', { class: 'panel-body' },
+        h('div', { class: 'page-width' }, lineupCard, sortCard, settingsCard)),
+      h('div', { class: 'panel-foot' }, saveBtn, h('span', { class: 'dim small' }, 'Settings are saved per channel; other channels using the same sort keep their own values.')));
+
+    // ---- lineup summary (from Tunarr) ----
+    loadChannelData(ch.id).then(d => {
+      const shows = new Set(d.pool.map(p => p.showTitle)).size;
+      const playing = d.current[d.playingIndex];
+      const playingItem = playing?.id ? d.byId.get(playing.id) : null;
+      clear(lineupCard, h('h3', null, 'On Tunarr now'),
+        h('div', { class: 'stat' }, h('span', null, 'Lineup'), h('span', { class: 'v' }, `${d.current.length} items · ${fmtDur(d.totalDurationMs)}`)),
+        h('div', { class: 'stat' }, h('span', null, 'Episode pool'), h('span', { class: 'v' }, `${d.pool.length} episodes · ${shows} show${shows === 1 ? '' : 's'}`)),
+        h('div', { class: 'stat' }, h('span', null, 'Lineup started'), h('span', { class: 'v' }, fmtWhen(d.startTime))),
+        playingItem ? h('div', { class: 'stat' }, h('span', null, 'Playing now'), h('span', { class: 'v' }, `${playingItem.showTitle} · ${playingItem.episodeLabel ? playingItem.episodeLabel + ' · ' : ''}${playingItem.title}`)) : null,
+        d.scheduleType ? h('p', { class: 'small warn-text', style: { marginTop: '10px' } },
+          `This lineup was generated in Tunarr by a "${d.scheduleType}" slot schedule. Applying from Schedule Lab replaces it with a fixed lineup; a backup is taken first so it can be restored.`) : null,
+      );
+    }).catch(err => clear(lineupCard, h('h3', null, 'On Tunarr now'), h('p', { class: 'err-text small' }, err.message)));
+
+    // ---- sort & version ----
+    async function drawSort() {
+      const sorts = store.sorts || [];
+      const sortSelect = h('select', {
+        onchange: async e => {
+          const id = e.target.value ? Number(e.target.value) : null;
+          setup.sortId = id;
+          setup.sortVersion = id ? findSort(id).latest_version : null;
+          markDirty();
+          await drawSort();
+        },
+      }, h('option', { value: '' }, '(no sort)'), sorts.map(s => h('option', { value: s.id, selected: s.id === setup.sortId }, s.name)));
+
+      if (!sorts.length) {
+        clear(sortCard, h('h3', null, 'Sort'),
+          h('p', null, 'The library is empty. Import the 1.8 sorts or write one in the Sort Builder.'),
+          h('div', { class: 'btn-row' },
+            h('button', { class: 'btn primary', onclick: e => busy(e.currentTarget, async () => {
+              const r = await api('POST', '/api/sorts/import-presets');
+              toast(`Imported ${r.added.length} sort(s).`, 'ok');
+              await loadSorts(true);
+              drawSort();
+            }) }, 'Import 1.8 sorts'),
+            h('button', { class: 'btn', onclick: () => go('builder') }, 'Open Sort Builder')));
+        settings = [];
+        drawSettings();
+        return;
+      }
+
+      const sort = setup.sortId ? findSort(setup.sortId) : null;
+      let versionRow = null;
+      if (sort) {
+        const detailSort = await api('GET', `/api/sorts/${sort.id}`);
+        const versionSelect = h('select', {
+          onchange: async e => { setup.sortVersion = Number(e.target.value); markDirty(); await drawSort(); },
+        }, detailSort.versions.map(v => h('option', { value: v.version, selected: v.version === setup.sortVersion },
+          `v${v.version}${v.version === sort.latest_version ? ' (latest)' : ''}${v.note ? ' · ' + v.note : ''}`)));
+        const behind = setup.sortVersion < sort.latest_version;
+        versionRow = h('div', null,
+          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Version'), versionSelect,
+            h('span', { class: 'hint' }, 'The channel stays on this version until you move it up, so editing the sort never changes this channel by surprise.')),
+          behind ? h('div', { class: 'btn-row', style: { marginBottom: '8px' } },
+            h('span', { class: 'pill warn' }, `v${sort.latest_version} is available`),
+            h('button', { class: 'btn small', onclick: async () => { setup.sortVersion = sort.latest_version; markDirty(); await drawSort(); } }, `Move up to v${sort.latest_version}`)) : null,
+          sort.description ? h('p', { class: 'dim small' }, sort.description) : null,
+          h('button', { class: 'btn small ghost', onclick: () => go('builder', { sort: sort.id }) }, 'Open in Sort Builder'));
+        const v = await api('GET', `/api/sorts/${sort.id}/versions/${setup.sortVersion}`);
+        settings = parseSettings(v.code).settings;
+      } else {
+        settings = [];
+      }
+      clear(sortCard, h('h3', null, 'Sort'),
+        h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Sort from the library'), sortSelect),
+        versionRow);
+      drawSettings();
+    }
+
+    function drawSettings() {
+      const hours = h('input', { type: 'number', min: 1, step: 1, value: String(setup.targetHours), oninput: e => { setup.targetHours = Number(e.target.value); daysNote.textContent = fmtDur(setup.targetHours * 3600000); markDirty(); } });
+      const daysNote = h('span', { class: 'hint' }, fmtDur(setup.targetHours * 3600000));
+      clear(settingsCard,
+        h('h3', null, 'Settings for this channel'),
+        setup.sortId
+          ? settingsForm({ settings, values: setup.values, onChange: v => { setup.values = { ...setup.values, ...v }; markDirty(); } })
+          : h('p', { class: 'dim small' }, 'Assign a sort to see its settings.'),
+        h('h3', null, 'Lineup'),
+        h('div', { class: 'row' },
+          h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Lineup length (hours)'), hours, daysNote),
+          h('div', null,
+            h('label', { class: 'check', style: { marginTop: '18px' } },
+              h('input', { type: 'checkbox', checked: setup.alignStart, onchange: e => { setup.alignStart = e.target.checked; markDirty(); } }),
+              'Start the lineup at the preview\'s start time'),
+            h('span', { class: 'dim small' }, 'On Apply, sets the channel\'s start time so the first item plays when the preview says. Tunarr loops the lineup when it runs out.'))),
+      );
+    }
+
+    saveBtn.onclick = () => busy(saveBtn, async () => {
+      const saved = await api('PUT', `/api/channels/${encodeURIComponent(ch.id)}/setup`, {
+        sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart,
+      });
+      ch.setup = saved;
+      ch.sortName = saved.sortId ? findSort(saved.sortId)?.name : null;
+      ch.latestVersion = saved.sortId ? findSort(saved.sortId)?.latest_version : null;
+      dirty = false;
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saved';
+      toast(`Saved ${ch.name}.`, 'ok');
+      drawList();
+      drawDetail();
+    });
+
+    await drawSort();
+  }
+
+  drawList();
+  await drawDetail();
+}

@@ -1,0 +1,19 @@
+services:
+  schedule-lab:
+    build: .
+    image: schedule-lab:2.0
+    container_name: schedule-lab
+    restart: unless-stopped
+    ports:
+      # Home network only: don't forward this port on your router.
+      - "8765:8765"
+    environment:
+      # The only required setting: where Tunarr is, by IP over the LAN.
+      TUNARR_URL: http://192.168.1.197:8000
+      # Work/sleep hours and the timeline use this time zone. Match your house.
+      TZ: America/New_York
+    volumes:
+      - schedule-lab-data:/data
+
+volumes:
+  schedule-lab-data:
