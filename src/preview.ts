@@ -136,6 +136,8 @@ export interface RunRequest {
   /** channelId 'draft' only: the pool sources to preview (Channel Builder). */
   pool?: unknown;
   name?: string;
+  /** Also score the result with this scoring code (automations). */
+  scoreCode?: string;
 }
 
 export async function runPreview(req: RunRequest) {
@@ -154,7 +156,7 @@ export async function runPreview(req: RunRequest) {
   } else {
     throw new HttpError(400, 'Pick a sort to run.');
   }
-  const result = await runOrExplain(code, sortInput(data, params, targetMs, start));
+  const result = await runOrExplain(code, sortInput(data, params, targetMs, start), req.scoreCode);
   return finishPreview(data, result, { label, sortId, sortVersion, start, targetMs });
 }
 

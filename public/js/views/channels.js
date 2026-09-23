@@ -5,6 +5,7 @@ import { api, busy, clear, confirmDialog, fmtAgo, fmtDur, fmtWhen, h, modal, toa
 import { addFlusher, channelLabel, findSort, forgetChannelData, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { poolEditor } from '../components/pool-editor.js';
+import { automationsCard } from '../components/automations.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
 export async function render(root, { go }) {
@@ -113,7 +114,31 @@ export async function render(root, { go }) {
     const lineupCard = h('div', { class: 'card' }, h('h3', null, 'On Tunarr now'), h('div', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
     const sortCard = h('div', { class: 'card' });
     if (!setup.pool) setup.pool = { sources: [], exclusions: [] };
-    const poolCard = h('div', { class: 'card' }, poolEditor({ pool: setup.pool, lineupEpisodes: ch.programCount ?? '?', onChange: () => markDirty() }));
+    // The pool was changed on the server (a suggestion added, a rule converted): reload it.
+    const reloadPool = async () => {
+      await saveNow();
+      ch.setup = await api('GET', url);
+      forgetChannelData(ch.id);
+      await drawDetail();
+    };
+    const convertRule = async src => {
+      const ok = await confirmDialog({
+        title: 'Convert library rule',
+        message: `Replace "${src.label}" with the shows and movies it matches today, and add the "Add new matching shows" automation to this channel so new matches are suggested for you to approve?
+
+Library rules now live in automations.`,
+        confirmLabel: 'Convert',
+      });
+      if (!ok) return;
+      try {
+        await saveNow();
+        const r = await api('POST', `/api/channels/${encodeURIComponent(ch.id)}/pool/convert-rule`, { sourceId: src.id });
+        toast(`Added ${r.added} show(s) in place of the rule.${r.assignment ? ' "Add new matching shows" runs weekly in suggest mode.' : ''}${r.note ? ' ' + r.note : ''}`, 'ok', 10000);
+        await reloadPool();
+      } catch (err) { toast(err.message, 'err'); }
+    };
+    const poolCard = h('div', { class: 'card' }, poolEditor({ pool: setup.pool, lineupEpisodes: ch.programCount ?? '?', allowRules: false, onConvertRule: convertRule, onChange: () => markDirty() }));
+    const autoCard = automationsCard({ channel: ch, go, onPoolChanged: () => reloadPool().catch(err => toast(err.message, 'err')) });
     const settingsCard = h('div', { class: 'card' });
 
     clear(detail,
@@ -124,7 +149,7 @@ export async function render(root, { go }) {
           h('button', { class: 'btn small ghost', onclick: () => removeChannel(ch) }, 'Delete'),
           previewBtn)),
       h('div', { class: 'panel-body' },
-        h('div', { class: 'page-width' }, lineupCard, poolCard, sortCard, settingsCard)),
+        h('div', { class: 'page-width' }, lineupCard, poolCard, sortCard, settingsCard, autoCard)),
       h('div', { class: 'panel-foot' }, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.')));
 
     // ---- lineup summary (from Tunarr) ----

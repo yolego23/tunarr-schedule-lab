@@ -226,3 +226,9 @@ details.fold summary{cursor:pointer;font-family:var(--mono);font-size:11px;color
 .card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
 .card-head h3{margin:0;}
 .card .card-foot{display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;}
+
+/* Automations */
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--hover, rgba(127, 127, 127, 0.08)); }
+.assignment { border-top: 1px solid var(--line); padding: 8px 0; }
+.assignment:first-of-type { border-top: 0; }

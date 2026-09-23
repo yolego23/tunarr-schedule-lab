@@ -50,7 +50,8 @@ Automations, Settings (global settings and global variables).
   - Pool sources + library rules (done in 2.1.0-beta.4).
   - Channel Builder (done in 2.1.0-beta.5; picks shows/movies only, no rules).
   - Channels "+ New" opens the Channel Builder (2.1.0-beta.6).
-  - Coded Automations + library (beta.7); move library rules out of the Pool card into automations.
+  - Coded Automations + Automation Library; library rules moved out of the Pool card (Convert button)
+    into the "Add new matching shows" automation (done in 2.1.0-beta.7).
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
@@ -100,6 +101,16 @@ Automations, Settings (global settings and global variables).
   `/api/run` channelId `draft` + `pool` (no channel yet); `/api/builder/create` creates the channel,
   saves setup, and applies that draft preview (`applyPreview(..., { adoptDraft: true })`). Optional AI
   tasks: basics, shows (from the whole library catalog), settings; feature 'builder'.
+
+- Automations (`src/automations.ts`, starters in `src/automation-presets.ts`): tables automations,
+  automation_versions, channel_automations (assignment: version, values, timetable, enabled, next_run_at),
+  automation_runs (queue + history, status queued/running/applied/done/skipped/failed), pool_suggestions.
+  Sandbox: `runAutomation` with `bootstrap-automation.js` (no sort slot; builds run sorts through
+  `runPreview`, which takes the slot). Everything goes through the bridge in `makeBridge`, which enforces:
+  own channel only, apply via `applyPreview` (backup), once per run, not empty, `minLengthPercent`
+  (default 50) of min(current duration, targetHours); dry runs only record changes. Timetables are local
+  server time; no set time = hashed spot in the window. Tick every 60 s; retries only for "Can't reach
+  Tunarr" and only if nothing changed yet. Deleting a channel turns its automations off; copying copies them.
 
 ## Tunarr API notes (1.3.15)
 - Lineup write: `POST /api/channels/{id}/programming` with `{type:"manual", lineup:[...], append?}`.

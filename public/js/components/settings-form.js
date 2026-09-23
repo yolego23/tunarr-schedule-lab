@@ -11,14 +11,14 @@ import { loadFillerLists } from '../store.js';
  * onChange gets the full stored form: own values plus links.
  * `globals` is the list from /api/globals; omit it to hide linking.
  */
-export function settingsForm({ settings, values, onChange, globals = [] }) {
+export function settingsForm({ settings, values, onChange, globals = [], emptyText = 'This sort declares no settings.' }) {
   const stored = values || {};
   const own = resolveValues(settings, Object.fromEntries(Object.entries(stored).filter(([, v]) => !isLink(v))));
   const links = {};
   for (const s of settings) if (isLink(stored[s.key])) links[s.key] = stored[s.key].$global;
   const emit = () => onChange(Object.fromEntries(settings.map(s => [s.key, links[s.key] ? { $global: links[s.key] } : own[s.key]])));
 
-  if (!settings.length) return h('p', { class: 'dim small' }, 'This sort declares no settings.');
+  if (!settings.length) return h('p', { class: 'dim small' }, emptyText);
 
   const renderField = s => {
     let fieldEl; // this field's element, replaced when the link changes

@@ -22,6 +22,21 @@ export interface AppSettings {
     /** Forget watches older than this many days; 0 = keep until pushed out by newer ones. */
     maxAgeDays: number;
   };
+  automations: {
+    /** Off = timetables don't run (Run now and dry runs still work). */
+    enabled: boolean;
+    /** Timetables without a set time run somewhere in this window (HH:MM, local time). */
+    windowStart: string;
+    windowEnd: string;
+    /** Automations running at once. */
+    concurrency: number;
+    /** Sandbox time per run, not counting builds, applies and AI calls. */
+    timeLimitSec: number;
+    /** Retries when Tunarr can't be reached. */
+    retries: number;
+    retryDelayMin: number;
+    keepRunsDays: number;
+  };
 }
 
 export const SETTING_DEFAULTS: AppSettings = {
@@ -32,6 +47,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   sortTimeLimitSec: 10,
   scoreCode: DEFAULT_SCORE_CODE,
   watchTracker: { enabled: true, minMinutes: 5, keepPerEpisode: 5, maxAgeDays: 0 },
+  automations: { enabled: true, windowStart: '01:00', windowEnd: '05:00', concurrency: 1, timeLimitSec: 60, retries: 2, retryDelayMin: 15, keepRunsDays: 90 },
 };
 
 type Key = keyof AppSettings;
@@ -62,6 +78,23 @@ const VALIDATE: { [K in Key]: (v: any) => AppSettings[K] } = {
     keepPerEpisode: Math.round(num(v?.keepPerEpisode, 1, 100, 'Watches kept per episode')),
     maxAgeDays: Math.round(num(v?.maxAgeDays ?? 0, 0, 3650, 'Forget watches older than (days)')),
   }),
+  automations: v => {
+    const hhmm = (x: unknown, what: string) => {
+      const m = /^(d{1,2}):(d{2})$/.exec(String(x ?? '').trim());
+      if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) throw new HttpError(400, `${what} must be a time like 01:00.`);
+      return `${m[1].padStart(2, '0')}:${m[2]}`;
+    };
+    return {
+      enabled: v?.enabled !== false,
+      windowStart: hhmm(v?.windowStart, 'The window start'),
+      windowEnd: hhmm(v?.windowEnd, 'The window end'),
+      concurrency: Math.round(num(v?.concurrency, 1, 2, 'Automations at once')),
+      timeLimitSec: num(v?.timeLimitSec, 5, 600, 'The automation time limit (seconds)'),
+      retries: Math.round(num(v?.retries, 0, 10, 'Retries')),
+      retryDelayMin: num(v?.retryDelayMin, 1, 240, 'Minutes between retries'),
+      keepRunsDays: Math.round(num(v?.keepRunsDays, 1, 3650, 'Days of run history')),
+    };
+  },
   scoreCode: v => {
     if (typeof v !== 'string' || !/function\s+score\s*\(/.test(v)) throw new HttpError(400, 'The scoring code must define function score(ctx).');
     return v;

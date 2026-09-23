@@ -1,6 +1,8 @@
-// Runs sort code in a sandboxed child process: no file or network access, a
-// time limit (10 s by default), and a memory cap. At most
-// config.sandboxConcurrency children run at once; the rest wait in a queue.
+// Runs sort and automation code in a sandboxed child process: no file or
+// network access, a time limit (10 s by default for sorts), and a memory cap.
+// Sorts: at most config.sandboxConcurrency at once, the rest wait. Automations
+// are paced by their own job queue, and don't take sort slots (an automation
+// builds lineups by running its channel's sort).
 import { fork } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,11 +16,9 @@ const SERVER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 // weekly-hours.js and analysis.js are ES modules for the server and browser;
 // in the sandbox they are loaded as plain scripts.
 const asScript = (file: string) => fs.readFileSync(file, 'utf8').replace(/^export /gm, '');
-const PRELUDE = [
-  asScript(path.join(config.sharedDir, 'weekly-hours.js')),
-  asScript(path.join(config.sharedDir, 'analysis.js')),
-  fs.readFileSync(path.join(here, 'bootstrap.js'), 'utf8'),
-].join('\n;\n');
+const SHARED = [asScript(path.join(config.sharedDir, 'weekly-hours.js')), asScript(path.join(config.sharedDir, 'analysis.js'))];
+const SORT_PRELUDE = [...SHARED, fs.readFileSync(path.join(here, 'bootstrap.js'), 'utf8')].join('\n;\n');
+const AUTOMATION_PRELUDE = [...SHARED, fs.readFileSync(path.join(here, 'bootstrap-automation.js'), 'utf8')].join('\n;\n');
 
 export interface SortInput {
   pool: unknown[];
@@ -89,10 +89,42 @@ async function slot<T>(fn: () => Promise<T>): Promise<T> {
 
 export function runSort(code: string, input: SortInput, scoreCode?: string, options: number | RunOptions = {}): Promise<SortResult> {
   const opts: RunOptions = typeof options === 'number' ? { timeLimitMs: options } : options;
-  return slot(() => runOnce(code, input, scoreCode, opts.timeLimitMs ?? config.sortTimeLimitMs, opts.bridge ?? noBridge));
+  return slot(() => runOnce({
+    what: 'sort', prelude: SORT_PRELUDE, code, scoreCode, input,
+    timeLimitMs: opts.timeLimitMs ?? config.sortTimeLimitMs, wallLimitMs: 5 * 60_000, bridge: opts.bridge ?? noBridge,
+  })).then(r => ({ items: r.parsed.items, score: r.parsed.score, logs: r.parsed.logs || [], ms: r.ms }));
 }
 
-function runOnce(code: string, input: SortInput, scoreCode: string | undefined, timeLimitMs: number, bridge: BridgeHandler): Promise<SortResult> {
+export interface AutomationResult {
+  /** What run(ctx) returned (made JSON-safe), and the log. */
+  result: unknown;
+  logs: string[];
+  ms: number;
+}
+
+/** Runs automation code. Its ctx helpers (build, apply, …) are served by `bridge`. */
+export function runAutomation(code: string, input: unknown, options: { timeLimitMs: number; bridge: BridgeHandler }): Promise<AutomationResult> {
+  return runOnce({
+    what: 'automation', prelude: AUTOMATION_PRELUDE, code, input,
+    timeLimitMs: options.timeLimitMs, wallLimitMs: 20 * 60_000, bridge: options.bridge,
+  }).then(r => ({ result: r.parsed.result ?? null, logs: r.parsed.logs || [], ms: r.ms }));
+}
+
+interface RunSpec {
+  what: 'sort' | 'automation';
+  prelude: string;
+  code: string;
+  scoreCode?: string;
+  input: unknown;
+  timeLimitMs: number;
+  /** Total time including helper calls. */
+  wallLimitMs: number;
+  bridge: BridgeHandler;
+}
+
+function runOnce(spec: RunSpec): Promise<{ parsed: any; ms: number }> {
+  const { what, prelude, code, scoreCode, input, timeLimitMs, wallLimitMs, bridge } = spec;
+  const The = what === 'sort' ? 'The sort' : 'The automation';
   return new Promise((resolve, reject) => {
     const child = fork(RUNNER, [], {
       execArgv: ['--permission', '--max-old-space-size=512', '--disable-warning=ExperimentalWarning'],
@@ -112,7 +144,7 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
     let bridgesOpen = 0;
     const startedAt = Date.now();
 
-    const finish = (err: Error | null, result?: SortResult) => {
+    const finish = (err: Error | null, result?: { parsed: any; ms: number }) => {
       if (settled) return;
       settled = true;
       clearInterval(timer);
@@ -126,16 +158,16 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
       if (clockRunning && bridgesOpen === 0) usedMs += now - lastTick;
       lastTick = now;
       if (usedMs > timeLimitMs) {
-        finish(new SortError(`The sort took longer than ${timeLimitMs / 1000} seconds and was stopped.`));
-      } else if (now - startedAt > 5 * 60_000) {
-        finish(new SortError('The sort ran for 5 minutes (including helper calls) and was stopped.'));
+        finish(new SortError(`${The} took longer than ${timeLimitMs / 1000} seconds and was stopped.`));
+      } else if (now - startedAt > wallLimitMs) {
+        finish(new SortError(`${The} ran for ${wallLimitMs / 60_000} minutes (including helper calls) and was stopped.`));
       }
     }, 50);
 
     child.on('message', (msg: any) => {
       switch (msg?.kind) {
         case 'ready':
-          child.send({ kind: 'start', prelude: PRELUDE, code, scoreCode, input: JSON.stringify(input), timeLimitMs: timeLimitMs });
+          child.send({ kind: 'start', prelude, code, scoreCode, input: JSON.stringify(input), timeLimitMs, filename: `${what}.js` });
           break;
         case 'running':
           clockRunning = true;
@@ -154,16 +186,15 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
         }
         case 'done': {
           try {
-            const parsed = JSON.parse(msg.result);
-            finish(null, { items: parsed.items, score: parsed.score, logs: parsed.logs || [], ms: Number(msg.ms) || 0 });
+            finish(null, { parsed: JSON.parse(msg.result), ms: Number(msg.ms) || 0 });
           } catch (err: any) {
-            finish(new SortError(`Could not read the sort's result: ${err.message}`));
+            finish(new SortError(`Could not read the ${what}'s result: ${err.message}`));
           }
           break;
         }
         case 'error':
           finish(new SortError(/Script execution timed out/.test(msg.error)
-            ? `The sort took longer than ${timeLimitMs / 1000} seconds and was stopped.`
+            ? `${The} took longer than ${timeLimitMs / 1000} seconds and was stopped.`
             : msg.error));
           break;
       }
@@ -172,10 +203,10 @@ function runOnce(code: string, input: SortInput, scoreCode: string | undefined, 
       if (settled) return;
       const oom = /heap out of memory/i.test(stderr);
       finish(new SortError(oom
-        ? 'The sort ran out of memory (512 MB limit).'
-        : `The sort sandbox stopped unexpectedly (${signal || `exit ${code}`}). ${stderr.trim().split('\n').slice(-3).join(' ')}`));
+        ? `${The} ran out of memory (512 MB limit).`
+        : `${The} sandbox stopped unexpectedly (${signal || `exit ${code}`}). ${stderr.trim().split('\n').slice(-3).join(' ')}`));
     });
-    child.on('error', err => finish(new SortError(`Could not start the sort sandbox: ${err.message}`)));
+    child.on('error', err => finish(new SortError(`Could not start the ${what} sandbox: ${err.message}`)));
   });
 }
 

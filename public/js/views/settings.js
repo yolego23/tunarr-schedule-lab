@@ -32,6 +32,21 @@ export async function render(root) {
       ],
     }),
     settingCard({
+      title: 'Automations',
+      note: 'Timetables without a set time run somewhere in this window, at a different spot for each channel. Runs wait in one queue; the time limit counts only the automation's own code (not the sorts it builds, applies or AI calls). Runs that fail because Tunarr can't be reached are tried again.',
+      key: 'automations',
+      fields: v => [
+        checkField('Run automations on their timetables', v.enabled, x => { v.enabled = x; }),
+        timeField('Window starts', v.windowStart, x => { v.windowStart = x; }),
+        timeField('Window ends', v.windowEnd, x => { v.windowEnd = x; }),
+        numberField('Automations at once (1 or 2)', v.concurrency, 1, x => { v.concurrency = x; }),
+        numberField('Time limit per run (seconds)', v.timeLimitSec, 1, x => { v.timeLimitSec = x; }),
+        numberField('Retries when Tunarr is unreachable', v.retries, 1, x => { v.retries = x; }),
+        numberField('Minutes between retries', v.retryDelayMin, 1, x => { v.retryDelayMin = x; }),
+        numberField('Keep run history (days)', v.keepRunsDays, 1, x => { v.keepRunsDays = x; }),
+      ],
+    }),
+    settingCard({
       title: 'Defaults for new channels',
       note: 'Used for channels you haven\'t set up yet. Channels you\'ve saved keep their own values.',
       key: 'channelDefaults',
@@ -340,6 +355,11 @@ export async function render(root) {
 function numberField(label, value, step, set) {
   return h('label', { class: 'field' }, h('span', { class: 'lab' }, label),
     h('input', { type: 'number', value: String(value), step, min: 0, oninput: e => set(Number(e.target.value)) }));
+}
+
+function timeField(label, value, set) {
+  return h('label', { class: 'field' }, h('span', { class: 'lab' }, label),
+    h('input', { type: 'time', value: String(value), oninput: e => set(e.target.value) }));
 }
 
 function checkField(label, value, set) {

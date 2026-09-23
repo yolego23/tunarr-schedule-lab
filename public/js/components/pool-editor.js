@@ -16,11 +16,12 @@ const newId = () => 'src-' + Date.now().toString(36) + Math.random().toString(36
 const KIND_LABEL = { show: 'show', season: 'season', movie: 'movie', episode: 'episode', custom_show: 'custom show', rule: 'rule' };
 
 /**
- * poolEditor({ pool, lineupEpisodes, onChange, allowRules }) -> element
+ * poolEditor({ pool, lineupEpisodes, onChange, allowRules, onConvertRule }) -> element
  * allowRules: false hides "+ Rule" (library rules belong to Automations).
+ * onConvertRule(source): shows "Convert" on existing rule sources.
  * `pool` is { sources, exclusions } and is edited in place; onChange() after each edit.
  */
-export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, emptyText }) {
+export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, emptyText, onConvertRule }) {
   const el = h('div');
   let resolved = null;
   let resolving = false;
@@ -67,6 +68,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
       })),
       h('td', { class: 'actions' },
         src.kind === 'rule' ? h('button', { class: 'btn small ghost', onclick: () => ruleDialog(src) }, 'Edit') : null,
+        src.kind === 'rule' && onConvertRule ? h('button', { class: 'btn small', title: 'Replace the rule with the shows it matches now, plus an automation that suggests new matching shows', onclick: () => onConvertRule(src) }, 'Convert') : null,
         h('button', { class: 'btn small ghost', onclick: () => { pool.sources.splice(i, 1); changed(); } }, 'Remove'))));
 
     clear(el,

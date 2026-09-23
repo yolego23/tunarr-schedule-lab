@@ -23,6 +23,12 @@ import { checkGuide } from './guide-check.ts';
 import { builderAi, builderOptions, createFromBuilder, prefillFrom } from './builder.ts';
 import { cleanPool, forgetPoolCache, resolvePool, ruleOptions, searchLibrary } from './pool.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
+import {
+  automationStatus, convertRule, createAssignment, createAutomation, decideSuggestion, deleteAssignment, deleteAutomation, duplicateAutomation,
+  exportAutomation, getAutomation, getAutomationVersion, getRun, importAutomationFile, importPresetAutomations, listAssignments, listAutomations,
+  listRuns, listSuggestions, nextRunAt, cleanTimetable, rescheduleAll, runNow, saveAutomationVersion, startAutomations, stopAutomations, testCode, updateAssignment, updateAutomation,
+} from './automations.ts';
+import { NEW_AUTOMATION_CODE } from './automation-presets.ts';
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
 
@@ -170,13 +176,51 @@ route('GET', '/api/ai/usage', ({ query }) => listUsage(Number(query.get('limit')
 
 // ---------- global settings ----------
 route('GET', '/api/settings', () => allSettings());
-route('PUT', '/api/settings/:key', ({ params, body }) => ({ value: saveAppSetting(params.key, body?.value) }));
+route('PUT', '/api/settings/:key', ({ params, body }) => {
+  const value = saveAppSetting(params.key, body?.value);
+  if (params.key === 'automations') rescheduleAll();
+  return { value };
+});
 route('DELETE', '/api/settings/:key', ({ params }) => ({ value: resetAppSetting(params.key) }));
 
 // ---------- global variables ----------
 route('GET', '/api/globals', () => listGlobals());
 route('PUT', '/api/globals/:name', ({ params, body }) => saveGlobal(params.name, body || {}));
 route('DELETE', '/api/globals/:name', ({ params }) => { deleteGlobal(params.name); return { ok: true }; });
+
+// ---------- automations ----------
+route('GET', '/api/automations', () => listAutomations());
+route('GET', '/api/automations/template', () => ({ code: NEW_AUTOMATION_CODE }));
+route('GET', '/api/automations/status', () => automationStatus());
+route('POST', '/api/automations', ({ body }) => createAutomation(body || {}));
+route('POST', '/api/automations/import-presets', () => importPresetAutomations());
+route('POST', '/api/automations/import', ({ body }) => importAutomationFile(body));
+route('POST', '/api/automations/test', ({ body }) => testCode(body || {}));
+route('POST', '/api/automations/timetable-preview', ({ body }) => {
+  const t = cleanTimetable(body?.timetable);
+  const out: number[] = [];
+  let after = Date.now();
+  for (let i = 0; i < 5; i++) { const n = nextRunAt(t, after, `a${Number(body?.assignmentId) || 0}`); if (!n) break; out.push(n); after = n; }
+  return { next: out };
+});
+route('GET', '/api/automations/runs', ({ query }) => listRuns({ channelId: query.get('channelId') || undefined, assignmentId: Number(query.get('assignmentId')) || undefined, limit: Number(query.get('limit')) || 100 }));
+route('GET', '/api/automations/runs/:id', ({ params }) => getRun(num(params.id)));
+route('GET', '/api/automations/:id', ({ params }) => getAutomation(num(params.id)));
+route('PUT', '/api/automations/:id', ({ params, body }) => updateAutomation(num(params.id), body || {}));
+route('DELETE', '/api/automations/:id', ({ params }) => { deleteAutomation(num(params.id)); return { ok: true }; });
+route('POST', '/api/automations/:id/versions', ({ params, body }) => saveAutomationVersion(num(params.id), body || {}));
+route('GET', '/api/automations/:id/versions/:v', ({ params }) => getAutomationVersion(num(params.id), num(params.v)));
+route('POST', '/api/automations/:id/duplicate', ({ params }) => duplicateAutomation(num(params.id)));
+route('GET', '/api/automations/:id/export', ({ params }) => exportAutomation(num(params.id)));
+route('GET', '/api/assignments', ({ query }) => listAssignments(query.get('channelId') || undefined));
+route('POST', '/api/channels/:id/automations', ({ params, body }) => createAssignment(params.id, body || {}));
+route('PUT', '/api/assignments/:id', ({ params, body }) => updateAssignment(num(params.id), body || {}));
+route('DELETE', '/api/assignments/:id', ({ params }) => { deleteAssignment(num(params.id)); return { ok: true }; });
+route('POST', '/api/assignments/:id/run', ({ params, body }) => runNow(num(params.id), { dryRun: !!body?.dryRun }));
+route('GET', '/api/channels/:id/suggestions', ({ params }) => listSuggestions(params.id));
+route('POST', '/api/suggestions/:id/approve', ({ params }) => decideSuggestion(num(params.id), true));
+route('POST', '/api/suggestions/:id/dismiss', ({ params }) => decideSuggestion(num(params.id), false));
+route('POST', '/api/channels/:id/pool/convert-rule', ({ params, body }) => convertRule(params.id, String(body?.sourceId || '')));
 
 // ---------- export / import everything ----------
 route('GET', '/api/export', ({ query }) => {
@@ -191,6 +235,11 @@ route('GET', '/api/export', ({ query }) => {
     watchTotals: db.prepare('SELECT * FROM watch_totals').all(),
     channelArchive: db.prepare('SELECT * FROM channel_archive').all(),
     applyLog: db.prepare('SELECT * FROM apply_log').all(),
+    automations: db.prepare('SELECT * FROM automations').all(),
+    automationVersions: db.prepare('SELECT * FROM automation_versions').all(),
+    channelAutomations: db.prepare('SELECT * FROM channel_automations').all(),
+    automationRuns: db.prepare('SELECT * FROM automation_runs').all(),
+    poolSuggestions: db.prepare('SELECT * FROM pool_suggestions').all(),
   };
   if (query.get('backups') === '1') data.backups = db.prepare('SELECT * FROM backups').all();
   return data;
@@ -200,13 +249,16 @@ route('POST', '/api/import', ({ body }) => {
   const tables: Array<[string, unknown]> = [
     ['app_settings', body.appSettings], ['sorts', body.sorts], ['sort_versions', body.sortVersions],
     ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['watch_events', body.watchEvents], ['watch_totals', body.watchTotals], ['channel_archive', body.channelArchive], ['apply_log', body.applyLog], ['backups', body.backups],
+    ['automations', body.automations], ['automation_versions', body.automationVersions], ['channel_automations', body.channelAutomations],
+    ['automation_runs', body.automationRuns], ['pool_suggestions', body.poolSuggestions],
   ];
   const counts: Record<string, number> = {};
   transaction(() => {
     // Replaces what's here with the file's contents (backups only if the file has them).
+    // Empty the tables first, newest first, so links between them don't block it.
+    for (const [table, rows] of [...tables].reverse()) if (Array.isArray(rows)) db.exec(`DELETE FROM ${table}`);
     for (const [table, rows] of tables) {
       if (!Array.isArray(rows)) continue;
-      db.exec(`DELETE FROM ${table}`);
       const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map(c => c.name);
       const insert = db.prepare(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`);
       for (const row of rows as Array<Record<string, any>>) insert.run(...cols.map(c => row[c] ?? null));
@@ -289,11 +341,13 @@ server.listen(config.port, '0.0.0.0', () => {
     + `${count('SELECT count(*) AS n FROM channel_setup WHERE sort_id IS NOT NULL')} channels with a sort, ${count('SELECT count(*) AS n FROM backups')} backups`);
   if (storage.warning) console.warn(`[lab] WARNING: ${storage.warning}`);
   if (config.tunarrUrl) tracker.start();
+  startAutomations();
 });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
     tracker.stop();
+    stopAutomations();
     server.close();
     db.close();
     process.exit(0);

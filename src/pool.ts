@@ -73,7 +73,7 @@ export function cleanPool(input: any): PoolDefinition {
   return { sources, exclusions };
 }
 
-function cleanRule(r: any): PoolRule {
+export function cleanRule(r: any): PoolRule {
   const list = (v: unknown) => (Array.isArray(v) ? v.map(x => String(x).trim()).filter(Boolean).slice(0, 100) : undefined);
   const num = (v: unknown) => (v === undefined || v === null || v === '' ? undefined : Number(v));
   const rule: PoolRule = {

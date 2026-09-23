@@ -105,11 +105,12 @@ come from:
 
 - **+ Shows & movies:** search and browse your library; add whole shows,
   single seasons, or movies.
-- **+ Rule:** for example "Shows on Cartoon Network" or "Animation, 1995–2005,
-  rated TV-Y7". Rules use network/studio, genre, rating, library, years, title,
-  and "added in the last N days", with a live count of what matches. They are
-  checked every time a lineup is built, so new matching shows join on their own.
 - **+ Custom show:** a Tunarr custom show.
+- **Library rules** ("shows on Cartoon Network") now belong to automations.
+  A channel that still has a rule from 2.1.0-beta.4–6 shows a **Convert**
+  button: it swaps the rule for the shows it matches today and adds the
+  "Add new matching shows" automation, which suggests new matches for you to
+  approve (or adds them itself, if you set it to).
 - **Shows in pool:** everything the sources add up to, with **Exclude** per show.
 
 Each source has a **weight**; every episode carries `weight` (the highest of
@@ -118,6 +119,56 @@ them. A channel without sources works as before: its pool is what's on its
 lineup. `ctx.current` always has the lineup, so sort code can keep episodes
 that aren't in the sources if it wants to. A new, empty channel can be filled
 entirely from its pool sources.
+
+## Automations
+
+Automations are code, like sorts, kept in the **Automation Library** with
+every version. Add one to a channel on the Channels screen (Automations card).
+Each channel gets its own values for the automation's settings and its own
+timetable: weekly on chosen days, daily, monthly, every N days, every N
+hours, or only when you run it. Without a set time, it runs somewhere in the
+overnight window (Settings → Automations), at a different spot per channel.
+Runs wait in one queue, one or two at a time.
+
+**Import starter automations** loads: Weekly rebuild, Rebuild when running
+low, Best of several, AI picks the best, AI review before applying, and Add
+new matching shows. They are ordinary entries: edit, copy or delete them.
+
+Rules every automation follows, whatever its code says:
+
+- it can read every channel but only changes the channel it's on;
+- an apply is backed up first (undo it on Apply & History), happens at most
+  once per run, is never empty, and is refused if the new lineup is shorter
+  than `minLengthPercent` (a setting, 50 by default) of the channel's lineup
+  length;
+- **Dry run** (on the channel's card, or in the editor for unsaved code) shows
+  what it would change without changing anything.
+
+Each run's result, changes and log are in the run history. If Tunarr can't be
+reached, the run is tried again later (as long as it hadn't changed anything).
+Pool suggestions from automations show on the channel's card with **Add** and
+**Dismiss**; a dismissed show isn't suggested again.
+
+```js
+/* @settings
+candidates: number = 4
+minLengthPercent: number = 50
+*/
+async function run(ctx) {
+  const now = await ctx.lineup.current();            // { itemCount, durationMs, daysLeft, lastAppliedAt, ... }
+  if (now.daysLeft > 3) return ctx.skip('Plenty left');
+  const c = await ctx.build({ seed: Date.now() % 1e6 }); // runs the channel's sort
+  ctx.log('score', ctx.score(c));
+  await ctx.apply(c);
+}
+```
+
+Also: `ctx.params`, `ctx.channel`, `ctx.globals`, `ctx.history`, `ctx.dryRun`,
+`ctx.ai.available` / `ctx.ai.ask()`, `ctx.library.search(rule)`,
+`ctx.pool.get/add/suggest/exclude`, `ctx.channels.list/get` (read-only) and
+`ctx.utils`. New automations start from a template that lists them all. The
+time limit (60 s by default) counts only the automation's own code, not the
+sorts it builds, applies or AI answers.
 
 ## AI (optional)
 
@@ -216,10 +267,10 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.5): Watch Tracker and `ctx.history`, AI settings,
-  channel management, the guide check, pool sources and the Channel Builder
-  are done; coded Automations (beta.7) are next, and library rules move
-  there.
+- **2.1** (now 2.1.0-beta.7): Watch Tracker and `ctx.history`, AI settings,
+  channel management, the guide check, pool sources, the Channel Builder and
+  coded Automations with their library are done; library rules moved into
+  automations.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.
 - **2.3**: library search for pools, custom shows and smart collections as

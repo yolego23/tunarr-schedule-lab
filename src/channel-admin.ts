@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { db, transaction } from './db.ts';
 import { HttpError } from './sorts.ts';
 import { forgetChannelData } from './channel-data.ts';
+import { copyChannelAutomations, pauseChannelAutomations } from './automations.ts';
 import { tunarr, toWritableLineupItem, type LineupItem, type TunarrChannel } from './tunarr.ts';
 
 db.exec(`
@@ -140,6 +141,7 @@ export async function copyChannel(sourceId: string, input: ChannelBasics) {
   db.prepare(`INSERT OR IGNORE INTO channel_setup (channel_id, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, pool_json, updated_at)
     SELECT ?, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, pool_json, ? FROM channel_setup WHERE channel_id = ?`)
     .run(copy.id, Date.now(), sourceId);
+  copyChannelAutomations(sourceId, copy.id);
   return updated;
 }
 
@@ -168,6 +170,7 @@ export async function deleteChannel(id: string) {
     throw err;
   }
   forgetChannelData(id);
+  pauseChannelAutomations(id);
   return { archiveId: Number(r.lastInsertRowid), name: String(ch.name ?? '').trim(), number: ch.number };
 }
 

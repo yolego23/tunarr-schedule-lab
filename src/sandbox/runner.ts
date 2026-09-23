@@ -14,6 +14,7 @@ interface StartMessage {
   scoreCode?: string;
   input: string;
   timeLimitMs: number;
+  filename?: string;
 }
 
 let context: vm.Context | null = null;
@@ -25,7 +26,7 @@ function send(msg: unknown) {
 function errorText(err: unknown): string {
   if (err && typeof err === 'object' && 'stack' in err && typeof (err as any).stack === 'string') {
     // Keep the sort's own frames, drop the host's.
-    const lines = String((err as any).stack).split('\n').filter((l: string) => !/node:|runner\.ts/.test(l));
+    const lines = String((err as any).stack).split('\n').filter((l: string) => !/node:|runner\.ts|helpers\.js|evalmachine/.test(l));
     return lines.slice(0, 8).join('\n');
   }
   return String(err);
@@ -36,7 +37,7 @@ async function start(msg: StartMessage) {
   const opts = (filename: string) => ({ filename, timeout: msg.timeLimitMs });
   vm.runInContext(msg.prelude, context, opts('helpers.js'));
   vm.runInContext(`var __input = ${JSON.stringify(msg.input)};`, context);
-  vm.runInContext(`${msg.code}\n;globalThis.__run = typeof run === 'function' ? run : undefined;`, context, opts('sort.js'));
+  vm.runInContext(`${msg.code}\n;globalThis.__run = typeof run === 'function' ? run : undefined;`, context, opts(msg.filename || 'sort.js'));
   if (msg.scoreCode) {
     vm.runInContext(`${msg.scoreCode}\n;globalThis.__score = typeof score === 'function' ? score : undefined;`, context, opts('score.js'));
   }
