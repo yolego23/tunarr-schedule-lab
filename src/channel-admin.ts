@@ -102,8 +102,8 @@ async function defaultTranscodeConfigId(channels: TunarrChannel[]): Promise<stri
   return id;
 }
 
-/** A new, empty channel. */
-export async function createChannel(input: ChannelBasics) {
+/** A new, empty channel. `look` sets Tunarr channel fields such as icon, watermark and stream mode. */
+export async function createChannel(input: ChannelBasics & { look?: Record<string, unknown> }) {
   const channels = await channelsNow();
   const name = checkName(input.name);
   const number = input.number === undefined || input.number === ''
@@ -111,12 +111,13 @@ export async function createChannel(input: ChannelBasics) {
     : checkNumber(input.number, channels);
   const created = await tunarr.createChannel({
     ...NEW_CHANNEL_DEFAULTS,
+    transcodeConfigId: await defaultTranscodeConfigId(channels),
+    ...(input.look || {}),
     id: randomUUID(),
     name,
     number,
     groupTitle: String(input.groupTitle ?? '').trim() || 'tunarr',
     startTime: Date.now(),
-    transcodeConfigId: await defaultTranscodeConfigId(channels),
   });
   return created;
 }
@@ -136,8 +137,8 @@ export async function copyChannel(sourceId: string, input: ChannelBasics) {
   if (number !== undefined) changes.number = number;
   if (input.groupTitle !== undefined) changes.groupTitle = String(input.groupTitle).trim() || source.groupTitle;
   const updated = await tunarr.updateChannel(copy.id, changes);
-  db.prepare(`INSERT OR IGNORE INTO channel_setup (channel_id, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, updated_at)
-    SELECT ?, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, ? FROM channel_setup WHERE channel_id = ?`)
+  db.prepare(`INSERT OR IGNORE INTO channel_setup (channel_id, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, pool_json, updated_at)
+    SELECT ?, sort_id, sort_version, values_json, target_hours, align_start, timetable_json, pool_json, ? FROM channel_setup WHERE channel_id = ?`)
     .run(copy.id, Date.now(), sourceId);
   return updated;
 }

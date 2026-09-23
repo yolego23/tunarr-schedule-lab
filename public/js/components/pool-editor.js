@@ -16,10 +16,11 @@ const newId = () => 'src-' + Date.now().toString(36) + Math.random().toString(36
 const KIND_LABEL = { show: 'show', season: 'season', movie: 'movie', episode: 'episode', custom_show: 'custom show', rule: 'rule' };
 
 /**
- * poolEditor({ pool, lineupEpisodes, onChange }) -> element
+ * poolEditor({ pool, lineupEpisodes, onChange, allowRules }) -> element
+ * allowRules: false hides "+ Rule" (library rules belong to Automations).
  * `pool` is { sources, exclusions } and is edited in place; onChange() after each edit.
  */
-export function poolEditor({ pool, lineupEpisodes, onChange }) {
+export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, emptyText }) {
   const el = h('div');
   let resolved = null;
   let resolving = false;
@@ -47,7 +48,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange }) {
 
   function draw() {
     const header = !pool.sources.length
-      ? h('p', { class: 'dim small' },
+      ? h('p', { class: 'dim small' }, emptyText ||
           `No pool sources: this channel's pool is whatever is on its lineup now (${lineupEpisodes} lineup items). Add sources to build it from your library instead; new episodes then join on their own.`)
       : h('p', { class: 'small' },
           resolving ? h('span', { class: 'dim' }, h('span', { class: 'spinner' }), ' Reading the library…')
@@ -73,7 +74,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange }) {
         h('h3', null, 'Episode pool'),
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn small', onclick: () => browseDialog() }, '+ Shows & movies'),
-          h('button', { class: 'btn small', onclick: () => ruleDialog(null) }, '+ Rule'),
+          allowRules ? h('button', { class: 'btn small', onclick: () => ruleDialog(null) }, '+ Rule') : null,
           h('button', { class: 'btn small', onclick: () => customShowDialog() }, '+ Custom show'),
           pool.sources.length ? h('button', { class: 'btn small ghost', onclick: () => episodesDialog() }, 'Shows in pool') : null)),
       header,

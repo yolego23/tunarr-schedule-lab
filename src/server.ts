@@ -20,6 +20,7 @@ import { storageStatus } from './storage-check.ts';
 import { PROVIDERS, listModels, listUsage, publicAiConfig, saveAiConfig, testProvider, type Provider } from './ai.ts';
 import { copyChannel, createChannel, deleteChannel, listArchive, recreateChannel, suggestNumber, updateChannelBasics } from './channel-admin.ts';
 import { checkGuide } from './guide-check.ts';
+import { builderAi, builderOptions, createFromBuilder, prefillFrom } from './builder.ts';
 import { cleanPool, forgetPoolCache, resolvePool, ruleOptions, searchLibrary } from './pool.ts';
 import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 
@@ -87,6 +88,12 @@ route('GET', '/api/channels/:id/guide-check', ({ params, query }) => checkGuide(
 route('GET', '/api/channels/:id/setup', ({ params }) => getSetup(params.id));
 route('PUT', '/api/channels/:id/setup', ({ params, body }) => saveSetup(params.id, body || {}));
 route('GET', '/api/filler-lists', () => tunarr.fillerLists());
+
+// ---------- Channel Builder ----------
+route('GET', '/api/builder/options', () => builderOptions());
+route('GET', '/api/builder/prefill/:channelId', ({ params }) => prefillFrom(params.channelId));
+route('POST', '/api/builder/create', ({ body }) => createFromBuilder(body || {}));
+route('POST', '/api/builder/ai/:task', ({ params, body }) => builderAi(params.task, body || {}));
 
 // ---------- library and pool sources ----------
 route('GET', '/api/library/options', () => ruleOptions());

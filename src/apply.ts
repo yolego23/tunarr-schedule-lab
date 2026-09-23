@@ -75,10 +75,10 @@ async function writeChannel(channelId: string, lineup: LineupItem[], startTime: 
   return warnings;
 }
 
-export async function applyPreview(channelId: string, previewId: string, alignStart: boolean) {
+export async function applyPreview(channelId: string, previewId: string, alignStart: boolean, opts: { adoptDraft?: boolean } = {}) {
   if (channelId === 'sample') throw new HttpError(400, 'Sample data can\'t be applied to Tunarr.');
   const preview = getPreview(previewId);
-  if (preview.channelId !== channelId) throw new HttpError(400, 'That preview was made for a different channel.');
+  if (preview.channelId !== channelId && !(opts.adoptDraft && preview.channelId === 'draft')) throw new HttpError(400, 'That preview was made for a different channel.');
   if (!preview.lineup.length) throw new HttpError(400, 'The preview is empty; there is nothing to apply.');
   return withChannelLock(channelId, async () => {
     const ch = await tunarr.channel(channelId);

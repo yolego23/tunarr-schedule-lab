@@ -5,6 +5,7 @@ import { flushAll, forgetInAppUnsaved, loadChannels, loadSorts, store, unsavedMe
 
 const SCREENS = [
   { path: 'channels', label: 'Channels', load: () => import('./views/channels.js') },
+  { path: 'channel-builder', label: 'Channel Builder', load: () => import('./views/channel-builder.js') },
   { path: 'builder', label: 'Sort Builder', load: () => import('./views/builder.js') },
   { path: 'library', label: 'Sort Library', load: () => import('./views/library.js') },
   { path: 'preview', label: 'Preview & Compare', load: () => import('./views/preview.js') },

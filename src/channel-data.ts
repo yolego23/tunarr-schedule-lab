@@ -1,7 +1,8 @@
 // Reads a channel's lineup and episode pool from Tunarr and normalizes it into
 // the items sorts work with (the same fields 1.8 gave them).
 import { tunarr, type LineupItem, type ProgrammingResponse } from './tunarr.ts';
-import { resolvePool, type ResolvedPool } from './pool.ts';
+import { cleanPool, resolvePool, type ResolvedPool } from './pool.ts';
+import { HttpError } from './sorts.ts';
 import { getSetup } from './channels.ts';
 import { makeRng } from './shared/analysis.js';
 
@@ -180,6 +181,19 @@ export async function getChannelData(channelId: string, fresh = false): Promise<
   }
   cache.set(channelId, data);
   return data;
+}
+
+/** A channel that doesn't exist yet: its pool comes from the given pool sources, its lineup is empty. */
+export async function draftChannelData(def: unknown, name = 'New channel'): Promise<ChannelData> {
+  const pool = cleanPool(def);
+  if (!pool.sources.length) throw new HttpError(400, 'Add some shows or movies first.');
+  const resolved = await resolvePool(pool);
+  if (!resolved.items.length) throw new HttpError(400, 'The picked shows have no episodes.');
+  return {
+    channelId: 'draft', name, number: 0, startTime: Date.now(), fetchedAt: Date.now(),
+    pool: resolved.items, current: [], lineupRaw: [], lineupItems: [], poolSummary: resolved.sources, schedule: null,
+    totalDurationMs: 0, playingIndex: 0, playingOffsetMs: 0,
+  };
 }
 
 export function forgetChannelData(channelId: string): void {

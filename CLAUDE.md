@@ -48,7 +48,8 @@ Automations, Settings (global settings and global variables).
   - AI settings (Anthropic, OpenRouter, Ollama), channel management, guide check (done in 2.1.0-beta.2).
   - New-channel dialog: group dropdown, group-aware number suggestions (done in 2.1.0-beta.3).
   - Pool sources + library rules (done in 2.1.0-beta.4).
-  - Channel Builder (beta.5), coded Automations + library (beta.6).
+  - Channel Builder (done in 2.1.0-beta.5; picks shows/movies only, no rules).
+  - Coded Automations + library (beta.6); move library rules out of the Pool card into automations.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
@@ -94,6 +95,10 @@ Automations, Settings (global settings and global variables).
   movie, episode (all via `/api/programs/{id}/descendants`), custom_show, rule (search, then descendants).
   Tunarr search pages are 0-based. Items get `weight` (max of sources) and `sources`; sorts decide use.
   With sources, `getChannelData` builds `pool` from them; `lineupItems` keeps lineup episodes not in it.
+- Channel Builder (`src/builder.ts`, `public/js/views/channel-builder.js`): previews a draft with
+  `/api/run` channelId `draft` + `pool` (no channel yet); `/api/builder/create` creates the channel,
+  saves setup, and applies that draft preview (`applyPreview(..., { adoptDraft: true })`). Optional AI
+  tasks: basics, shows (from the whole library catalog), settings; feature 'builder'.
 
 ## Tunarr API notes (1.3.15)
 - Lineup write: `POST /api/channels/{id}/programming` with `{type:"manual", lineup:[...], append?}`.

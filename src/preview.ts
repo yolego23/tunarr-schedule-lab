@@ -1,7 +1,7 @@
 // Runs sorts against a channel's pool and keeps the resulting lineups
 // ("previews") in memory so Apply can write exactly what was previewed.
 import { randomUUID } from 'node:crypto';
-import { getChannelData, lastAiredMap, type ChannelData } from './channel-data.ts';
+import { draftChannelData, getChannelData, lastAiredMap, type ChannelData } from './channel-data.ts';
 import { historyForSort } from './watch.ts';
 import { getSetup } from './channels.ts';
 import { runSort, SortError, type BridgeHandler, type SortOutputItem } from './sandbox/index.ts';
@@ -83,7 +83,7 @@ const timeLimitMs = () => appSetting('sortTimeLimitSec') * 1000;
 function sortBridge(channelId: string): BridgeHandler {
   return async (kind, p) => {
     if (kind !== 'ai' && kind !== 'claude') throw new Error(`Unknown helper "${kind}"`);
-    const channel = channelId === 'sample' ? undefined : channelId;
+    const channel = channelId === 'sample' || channelId === 'draft' ? undefined : channelId;
     if (kind === 'claude') {
       // 1.8-style call: the sort's own key if it has one, else the Anthropic
       // provider from Settings → AI, else whatever the default provider is.
@@ -110,7 +110,7 @@ function checkTiming(targetHours: unknown, scheduleStartMs: unknown) {
 
 /** The code and settings values to run for a library sort on a channel. */
 function resolveSort(channelId: string, sortId: number, version: number | undefined, explicitParams?: Record<string, unknown>) {
-  const setup = channelId === 'sample' ? null : getSetup(channelId);
+  const setup = channelId === 'sample' || channelId === 'draft' ? null : getSetup(channelId);
   const v = version ?? (setup?.sortId === sortId && setup.sortVersion ? setup.sortVersion : undefined);
   const row = v ? getVersion(sortId, v) : latestVersion(sortId);
   const { settings } = parseSettings(row.code);
@@ -133,11 +133,14 @@ export interface RunRequest {
   targetHours: number;
   scheduleStartMs: number;
   label?: string;
+  /** channelId 'draft' only: the pool sources to preview (Channel Builder). */
+  pool?: unknown;
+  name?: string;
 }
 
 export async function runPreview(req: RunRequest) {
   const { targetMs, start } = checkTiming(req.targetHours, req.scheduleStartMs);
-  const data = await getChannelData(req.channelId);
+  const data = req.channelId === 'draft' ? await draftChannelData(req.pool, req.name) : await getChannelData(req.channelId);
   let code: string, params: Record<string, unknown>, label = req.label || 'Test run', sortId: number | null = null, sortVersion: number | null = null;
   if (req.code !== undefined) {
     code = String(req.code);
@@ -186,6 +189,8 @@ function finishPreview(data: ChannelData, result: Awaited<ReturnType<typeof runS
   const metrics = scoreSchedule(result.items.map(i => ('id' in i ? byId.get(i.id) : { type: 'flex' })));
   return {
     previewId: preview.id,
+    // A draft has no channel to load its episodes from, so send them along.
+    pool: data.channelId === 'draft' ? data.pool : undefined,
     label: preview.label,
     sortId: preview.sortId,
     sortVersion: preview.sortVersion,

@@ -78,6 +78,26 @@ for all channels, plus `lastAired(id)` from the channel's lineup. Preview
 timelines tag episodes already watched on the channel. The Watch Tracker
 screen shows what's streaming now and the log, where watches can be deleted.
 
+## Channel Builder
+
+A step-by-step screen for making a new channel, from blank or by copying and
+reshaping an existing one (the original isn't touched):
+
+1. **Basics:** name, group (or a new one), suggested number, and an optional
+   description.
+2. **Content:** pick shows, seasons, movies and custom shows.
+3. **Look & feel:** icon, watermark, stream mode, transcode profile, flex
+   title, hidden from the guide, filler lists.
+4. **Schedule:** sort, its settings, lineup length.
+5. **Preview & create:** preview the lineup before the channel exists, then
+   **Create** makes the channel in Tunarr, saves its Schedule Lab setup and
+   applies that lineup.
+
+If AI is set up and allowed for the Channel Builder, optional **✦ Ask AI**
+buttons suggest a name and group, shows from your library (you add the ones
+you want), and sort settings, all from the description. Everything works
+without them.
+
 ## Pool sources
 
 Each channel's **Episode pool** card (Channels screen) says where its episodes
@@ -196,10 +216,10 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.4): Watch Tracker and `ctx.history`, AI settings,
-  channel management, the guide check, and pool sources with library rules
-  are done; the Channel Builder (beta.5) and coded Automations (beta.6) are
-  next.
+- **2.1** (now 2.1.0-beta.5): Watch Tracker and `ctx.history`, AI settings,
+  channel management, the guide check, pool sources and the Channel Builder
+  are done; coded Automations (beta.6) are next, and library rules move
+  there.
 - **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
   similar touches that make a channel feel like real TV.
 - **2.3**: library search for pools, custom shows and smart collections as
