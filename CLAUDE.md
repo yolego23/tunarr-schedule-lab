@@ -85,6 +85,8 @@ Automations, Settings (global settings and global variables).
   `npm test`, `npm run typecheck`. Local dev uses port 8766; 8765 is often the 1.8 `lab-server.py`.
 - `src/tunarr.ts` is the only module that calls Tunarr. `src/sandbox/` runs sort code in a
   child process (`--permission`) inside a `DONT_CONTEXTIFY` vm context; only strings cross.
+- `docs/llm-guide.md` documents the whole sort and automation `ctx` for LLMs. Update it whenever
+  `bootstrap.js`, `bootstrap-automation.js`, the bridge in `automations.ts` or the settings types change.
 - `test/ui-syntax.test.ts` runs `node --check` on every browser file (no build step, so a syntax
   error otherwise only shows when a screen is opened). Write patch scripts to files (not bash
   heredocs): Git Bash heredocs mangled `\\'` and `\\n` escapes and broke a screen once.

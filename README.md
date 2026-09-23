@@ -247,6 +247,9 @@ Renaming a variable keeps its links; one that's still linked can't be deleted.
 
 ## Writing sorts
 
+To have an AI write one for you, give it [docs/llm-guide.md](docs/llm-guide.md)
+(the full sort and automation contract, with examples) plus what you want.
+
 A sort is `function run(ctx)` returning the new lineup (items from `ctx.pool`
 or `ctx.current`, in play order), the same contract as 1.8. Settings are
 declared at the top and become form fields:
