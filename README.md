@@ -28,6 +28,18 @@ Data lives in the `schedule-lab-data` volume (`/data/schedule-lab.db`), so
 rebuilding or updating the container keeps it. **Export** in the top bar saves
 everything to one JSON file; **Import** loads it on another machine.
 
+Keeping your data across updates:
+- Always update from the same folder (or the same Portainer stack). Compose
+  names the volume after the project, e.g. `schedule-lab_schedule-lab-data`,
+  so a different folder name means a different, empty volume.
+- Don't use `docker compose down -v`: `-v` deletes the volume.
+- The Settings screen shows the database file and the volume it's on, and a
+  red banner appears if `/data` isn't on a volume. The container log prints
+  how many sorts and channel setups it found at startup.
+- Check what exists with `docker volume ls | grep schedule-lab`.
+
+Channel settings save automatically as you change them.
+
 Home network only: there is no login. Don't forward port 8765 on your router;
 use a VPN to reach it from outside.
 
@@ -37,7 +49,8 @@ use a VPN to reach it from outside.
    time-block insert, AI optimizer and the work-schedule sort as ordinary,
    editable entries. The app has no built-in sorts.
 2. **Channels**: pick a channel, choose its sort, fill in that channel's
-   settings (work hours are painted on a week grid), set the lineup length, Save.
+   settings (work hours are painted on a week grid) and the lineup length.
+   Changes save automatically.
 3. **Preview & Compare**: run the channel's sort (or several sorts, several
    seeds each) and rank the candidates. Pick one → **Send to Apply**.
 4. **Apply & History**: Apply backs up the current lineup first (last 20 per

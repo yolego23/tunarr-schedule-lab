@@ -18,6 +18,30 @@ export const store = {
   selectedChannelId: localStorage.getItem('lab.channel') || '',
 };
 
+// ---------- unsaved changes ----------
+// Screens register what would be lost. `inApp: false` means it survives
+// switching screens (kept in memory) and is only lost on a page reload.
+const unsaved = new Map(); // key -> { message, inApp }
+const flushers = new Set();
+
+export function setUnsaved(key, message, { inApp = true } = {}) {
+  if (message) unsaved.set(key, { message, inApp }); else unsaved.delete(key);
+}
+export function unsavedMessages({ inAppOnly = false } = {}) {
+  return [...unsaved.values()].filter(u => !inAppOnly || u.inApp).map(u => u.message);
+}
+export function forgetInAppUnsaved() {
+  for (const [k, u] of unsaved) if (u.inApp) unsaved.delete(k);
+}
+/** Functions that push pending saves out right away (on leaving a screen or the page). */
+export function addFlusher(fn) {
+  flushers.add(fn);
+  return () => flushers.delete(fn);
+}
+export function flushAll({ unloading = false } = {}) {
+  for (const fn of flushers) { try { fn({ unloading }); } catch { /* best effort */ } }
+}
+
 export function onStoreChange(fn) {
   listeners.add(fn);
   return () => listeners.delete(fn);

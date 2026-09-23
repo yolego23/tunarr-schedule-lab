@@ -1,7 +1,7 @@
 // App shell: navigation between the tools, Tunarr connection status, and
 // export/import of all Schedule Lab data.
 import { api, clear, confirmDialog, download, h, pickJsonFile, toast } from './ui.js';
-import { loadChannels, loadSorts, store } from './store.js';
+import { flushAll, forgetInAppUnsaved, loadChannels, loadSorts, store, unsavedMessages } from './store.js';
 
 const SCREENS = [
   { path: 'channels', label: 'Channels', load: () => import('./views/channels.js') },
@@ -30,7 +30,39 @@ function parseHash() {
   return { path: path || 'channels', params: new URLSearchParams(query || '') };
 }
 
+// Leaving a screen with unsaved changes asks first; saying no stays put.
+let currentHash = location.hash;
+let revertingHash = false;
+async function onHashChange() {
+  if (revertingHash) { revertingHash = false; return; }
+  const lost = unsavedMessages({ inAppOnly: true });
+  if (lost.length) {
+    const target = location.hash;
+    revertingHash = true;
+    location.hash = currentHash; // stay here while asking
+    const leave = await confirmDialog({
+      title: 'Unsaved changes',
+      message: `${lost.join('\n')}\n\nLeave this screen and lose them?`,
+      confirmLabel: 'Leave without saving',
+      danger: true,
+    });
+    if (!leave) return;
+    forgetInAppUnsaved();
+    revertingHash = false;
+    location.hash = target;
+    return;
+  }
+  currentHash = location.hash;
+  route();
+}
+
+window.addEventListener('beforeunload', e => {
+  flushAll({ unloading: true });
+  if (unsavedMessages().length) { e.preventDefault(); e.returnValue = ''; }
+});
+
 async function route() {
+  flushAll();
   const { path, params } = parseHash();
   const screen = SCREENS.find(s => s.path === path) || SCREENS[0];
   for (const a of nav.children) a.classList.toggle('active', a.dataset.path === screen.path);
@@ -75,9 +107,10 @@ async function checkStatus() {
       text.className = 'pill err';
       text.title = s.error || '';
     }
-    const msg = s.connected ? s.warning : `Can't reach Tunarr. ${s.error || ''}`;
+    const storageWarning = s.storage?.warning;
+    const msg = storageWarning || (s.connected ? s.warning : `Can't reach Tunarr. ${s.error || ''}`);
     banner.hidden = !msg;
-    banner.className = `banner${s.connected ? '' : ' err'}`;
+    banner.className = `banner${storageWarning || !s.connected ? ' err' : ''}`;
     banner.textContent = msg || '';
   } catch (err) {
     dot.className = 'dot err';
@@ -122,7 +155,7 @@ document.getElementById('btnImport').onclick = async () => {
 };
 
 buildNav();
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', onHashChange);
 checkStatus();
 setInterval(checkStatus, 60_000);
 route();

@@ -16,6 +16,7 @@ import { applyPreview, getBackupFile, listBackups, listHistory, restoreBackup, u
 import { NEW_SORT_CODE } from './presets.ts';
 import { allSettings, resetAppSetting, saveAppSetting } from './app-settings.ts';
 import { deleteGlobal, listGlobals, saveGlobal } from './globals.ts';
+import { storageStatus } from './storage-check.ts';
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
 
@@ -40,6 +41,7 @@ route('GET', '/api/status', async () => {
   const status: Record<string, unknown> = {
     tunarrUrl: config.tunarrUrl, tested: config.testedTunarrVersions, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     dataDir: config.dataDir, port: config.port, appVersion: APP_VERSION,
+    storage: storageStatus(),
   };
   try {
     const v = await tunarr.version();
@@ -207,7 +209,12 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(config.port, '0.0.0.0', () => {
   console.log(`[lab] Schedule Lab 2.0 on http://0.0.0.0:${config.port}/`);
-  console.log(`[lab] Tunarr: ${config.tunarrUrl || '(TUNARR_URL not set)'}   Time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}   Data: ${config.dataDir}`);
+  console.log(`[lab] Tunarr: ${config.tunarrUrl || '(TUNARR_URL not set)'}   Time zone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`);
+  const count = (sql: string) => (db.prepare(sql).get() as { n: number }).n;
+  const storage = storageStatus();
+  console.log(`[lab] Data: ${storage.dbFile}${storage.volume ? ` (volume ${storage.volume})` : ''}: ${count('SELECT count(*) AS n FROM sorts')} sorts, `
+    + `${count('SELECT count(*) AS n FROM channel_setup WHERE sort_id IS NOT NULL')} channels with a sort, ${count('SELECT count(*) AS n FROM backups')} backups`);
+  if (storage.warning) console.warn(`[lab] WARNING: ${storage.warning}`);
 });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {

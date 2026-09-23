@@ -1,7 +1,7 @@
 // Sort Builder: write or edit a sort, declare its settings, test it against
 // sample data or a real channel's pool, and save it to the library.
 import { api, busy, clear, confirmDialog, fmtDur, fromLocalInput, h, modal, nowMinute, promptDialog, toLocalInput, toast } from '../ui.js';
-import { channelLabel, expandItems, findSort, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, store } from '../store.js';
+import { channelLabel, expandItems, findSort, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, setUnsaved, store } from '../store.js';
 import { codeEditor } from '../components/code-editor.js';
 import { settingsForm } from '../components/settings-form.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
@@ -119,6 +119,8 @@ export async function render(root, { params, go }) {
   let lastSettingsKey = '';
   function onCodeChange() {
     const unsaved = draft.code !== draft.savedCode;
+    // The draft survives switching screens, so only a page reload would lose it.
+    setUnsaved('builder', unsaved ? `Sort Builder: unsaved changes to "${draft.name || 'the new sort'}".` : null, { inApp: false });
     status.textContent = draft.sortId ? `v${draft.baseVersion}${unsaved ? ' · unsaved' : ''}` : (unsaved ? 'new · unsaved' : 'new');
     status.className = `pill${unsaved ? ' warn' : ''}`;
     const { settings, errors, hasBlock } = parseSettings(draft.code);

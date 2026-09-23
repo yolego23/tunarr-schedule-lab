@@ -1,7 +1,7 @@
 // Preview & Compare: run one or more library sorts on a channel, rank the
 // candidates with an editable scoring function, and inspect the timeline.
 import { api, busy, clear, fmtDur, fromLocalInput, h, nowMinute, toLocalInput, toast } from '../ui.js';
-import { channelLabel, currentItems, expandItems, findChannel, globalsMap, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, selectChannel, store } from '../store.js';
+import { channelLabel, currentItems, expandItems, findChannel, globalsMap, loadChannelData, loadChannels, loadGlobals, loadSettings, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { codeEditor } from '../components/code-editor.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
 import { makeHours } from '/shared/weekly-hours.js';
@@ -59,13 +59,17 @@ export async function render(root, { params, go }) {
         resultsBox,
         h('details', { class: 'fold' }, h('summary', null, 'Scoring function'),
           h('p', { class: 'dim small', style: { marginTop: '8px' } }, 'Ranks candidates when you compare more than one. Higher is better. Saved for next time.'),
-          (scoreEditor = codeEditor({ value: store.settings.scoreCode, minHeight: 240, onSave: () => saveScore() })),
+          (scoreEditor = codeEditor({
+            value: store.settings.scoreCode, minHeight: 240, onSave: () => saveScore(),
+            onChange: v => setUnsaved('scoring', v !== store.settings.scoreCode ? "Preview & Compare: the scoring function has changes that aren't saved." : null),
+          })),
           h('div', { class: 'btn-row', style: { marginTop: '8px' } },
             h('button', { class: 'btn small', onclick: () => saveScore() }, 'Save scoring'),
             h('button', { class: 'btn small ghost', onclick: async () => {
               const r = await api('DELETE', '/api/settings/scoreCode');
               store.settings.scoreCode = r.value || DEFAULT_SCORE_CODE;
               scoreEditor.setValue(store.settings.scoreCode);
+              setUnsaved('scoring', null);
               toast('Scoring reset to the default.', 'ok');
             } }, 'Reset to default'))))),
     h('div', { class: 'panel' },
@@ -80,6 +84,7 @@ export async function render(root, { params, go }) {
     try {
       await api('PUT', '/api/settings/scoreCode', { value: scoreEditor.getValue() });
       store.settings.scoreCode = scoreEditor.getValue();
+      setUnsaved('scoring', null);
       toast('Scoring function saved.', 'ok');
     } catch (err) { toast(err.message, 'err'); }
   }

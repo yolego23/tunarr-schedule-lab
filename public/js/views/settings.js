@@ -1,7 +1,7 @@
 // Settings: global settings, and global variables that every sort can read
 // (ctx.globals) and that channel settings can link to.
 import { api, busy, clear, confirmDialog, h, modal, toast } from '../ui.js';
-import { findChannel, loadChannels, loadGlobals, loadSettings, store } from '../store.js';
+import { findChannel, loadChannels, loadGlobals, loadSettings, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { GLOBAL_NAME_RE, GLOBAL_TYPES, coerce } from '/shared/sort-settings.js';
 
@@ -63,7 +63,12 @@ export async function render(root) {
   function settingCard({ title, note, key, keys, fields }) {
     const card = h('div', { class: 'card' });
     const allKeys = keys || [key];
+    const unsavedKey = `settings:${title}`;
+    const markUnsaved = () => setUnsaved(unsavedKey, `Settings: "${title}" has changes that aren't saved.`);
+    card.addEventListener('input', markUnsaved);
+    card.addEventListener('change', markUnsaved);
     const draw = () => {
+      setUnsaved(unsavedKey, null);
       // Edit a copy; single-key cards edit that value, multi-key cards an object of values.
       const draft = structuredClone(key ? store.settings[key] : Object.fromEntries(allKeys.map(k => [k, store.settings[k]])));
       const saveBtn = h('button', { class: 'btn primary small' }, 'Save');
@@ -187,7 +192,9 @@ export async function render(root) {
         row('Tunarr address', s.tunarrUrl || '(not set)'),
         row('Tunarr', s.connected ? `connected · version ${s.version}` : `not reachable${s.error ? ` · ${s.error}` : ''}`),
         row('Server time zone', s.timeZone),
-        row('Data folder', s.dataDir),
+        row('Database', s.storage.dbFile),
+        row('Kept across updates', s.storage.persistent === true ? `yes${s.storage.volume ? ` (volume ${s.storage.volume})` : ' (mounted folder)'}`
+          : s.storage.persistent === false ? 'NO: not on a volume' : 'not running in Docker'),
         row('Schedule Lab version', s.appVersion),
       ] : h('p', { class: 'err-text small' }, 'Could not read the server status.'),
       h('p', { class: 'dim small', style: { marginTop: '10px' } },

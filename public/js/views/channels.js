@@ -1,7 +1,8 @@
 // Channels: each channel's pool, its assigned library sort and version, its
 // own values for that sort's settings, and how long a lineup to build.
+// Changes save automatically.
 import { api, busy, clear, fmtDur, fmtWhen, h, toast } from '../ui.js';
-import { channelLabel, findSort, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, store } from '../store.js';
+import { addFlusher, channelLabel, findSort, loadChannelData, loadChannels, loadGlobals, loadSorts, selectChannel, setUnsaved, store } from '../store.js';
 import { settingsForm } from '../components/settings-form.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
@@ -42,7 +43,11 @@ export async function render(root, { go }) {
   }
   filter.addEventListener('input', drawList);
 
+  let removeFlusher = null;
+
   async function drawDetail() {
+    // Push out any pending save for the channel we're leaving.
+    if (removeFlusher) { removeFlusher.flush(); removeFlusher(); removeFlusher = null; }
     const ch = store.channels.find(c => c.id === store.selectedChannelId);
     if (!ch) {
       clear(detail, h('div', { class: 'panel-head' }, 'Channel'),
@@ -50,22 +55,66 @@ export async function render(root, { go }) {
       return;
     }
     const setup = structuredClone(ch.setup);
-    let dirty = false;
     let settings = [];
-    const saveBtn = h('button', { class: 'btn primary', disabled: true }, 'Save');
-    const markDirty = () => { dirty = true; saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; };
 
+    // ---- autosave ----
+    const url = `/api/channels/${encodeURIComponent(ch.id)}/setup`;
+    const unsavedKey = `channel:${ch.id}`;
+    const status = h('span', { class: 'pill ok' }, 'All changes saved');
+    const payload = () => ({ sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart });
+    let timer = null, pending = false, inFlight = null;
+    const setStatus = (kind, text) => { status.className = `pill ${kind}`; status.textContent = text; status.title = text; };
+    const markDirty = () => {
+      pending = true;
+      setStatus('warn', 'Saving…');
+      // Kept in memory until saved, so switching screens is fine; a reload would lose it.
+      setUnsaved(unsavedKey, `${ch.name}: changes are still being saved.`, { inApp: false });
+      clearTimeout(timer);
+      timer = setTimeout(saveNow, 600);
+    };
+    async function saveNow() {
+      clearTimeout(timer);
+      timer = null;
+      if (inFlight) await inFlight;
+      if (!pending) return;
+      pending = false;
+      inFlight = api('PUT', url, payload()).then(saved => {
+        ch.setup = saved;
+        ch.sortName = saved.sortId ? findSort(saved.sortId)?.name ?? null : null;
+        ch.latestVersion = saved.sortId ? findSort(saved.sortId)?.latest_version ?? null : null;
+        previewBtn.disabled = !saved.sortId;
+        drawList();
+        if (!pending) { setStatus('ok', `Saved ${new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`); setUnsaved(unsavedKey, null); }
+      }).catch(err => {
+        pending = true;
+        setStatus('err', `Not saved: ${err.message}`);
+        setUnsaved(unsavedKey, `${ch.name}: changes were not saved (${err.message}).`);
+      }).finally(() => { inFlight = null; });
+      await inFlight;
+    }
+    const flush = ({ unloading = false } = {}) => {
+      if (!pending) return;
+      if (unloading) {
+        // The page is going away: send it in a request that outlives the page.
+        fetch(url, { method: 'PUT', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload()) });
+        pending = false;
+        setUnsaved(unsavedKey, null);
+      } else saveNow();
+    };
+    removeFlusher = addFlusher(flush);
+    removeFlusher.flush = flush;
+
+    const previewBtn = h('button', { class: 'btn small', onclick: () => { flush(); go('preview', { channel: ch.id, run: '1' }); }, disabled: !setup.sortId, title: 'Assign a sort first to preview' }, 'Preview this channel');
     const lineupCard = h('div', { class: 'card' }, h('h3', null, 'On Tunarr now'), h('div', { class: 'dim small' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
     const sortCard = h('div', { class: 'card' });
     const settingsCard = h('div', { class: 'card' });
 
     clear(detail,
       h('div', { class: 'panel-head' }, h('span', null, channelLabel(ch)),
-        h('div', { class: 'btn-row' },
-          h('button', { class: 'btn small', onclick: () => go('preview', { channel: ch.id, run: '1' }), disabled: !setup.sortId, title: setup.sortId ? '' : 'Assign a sort first' }, 'Preview this channel'))),
+        h('div', { class: 'btn-row' }, status, previewBtn)),
       h('div', { class: 'panel-body' },
         h('div', { class: 'page-width' }, lineupCard, sortCard, settingsCard)),
-      h('div', { class: 'panel-foot' }, saveBtn, h('span', { class: 'dim small' }, 'Settings are saved per channel. Use the small menu by a setting to link it to a global variable instead.')));
+      h('div', { class: 'panel-foot' }, h('span', { class: 'dim small' }, 'Changes save automatically, per channel. Use the small menu by a setting to link it to a global variable instead.')));
 
     // ---- lineup summary (from Tunarr) ----
     loadChannelData(ch.id).then(d => {
@@ -158,24 +207,11 @@ export async function render(root, { go }) {
       );
     }
 
-    saveBtn.onclick = () => busy(saveBtn, async () => {
-      const saved = await api('PUT', `/api/channels/${encodeURIComponent(ch.id)}/setup`, {
-        sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart,
-      });
-      ch.setup = saved;
-      ch.sortName = saved.sortId ? findSort(saved.sortId)?.name : null;
-      ch.latestVersion = saved.sortId ? findSort(saved.sortId)?.latest_version : null;
-      dirty = false;
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saved';
-      toast(`Saved ${ch.name}.`, 'ok');
-      drawList();
-      drawDetail();
-    });
-
     await drawSort();
   }
 
   drawList();
   await drawDetail();
+  // Leaving the screen: save anything pending.
+  return () => { if (removeFlusher) { removeFlusher.flush(); removeFlusher(); } };
 }
