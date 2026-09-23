@@ -7,6 +7,7 @@ import { createChannel } from './channel-admin.ts';
 import { getChannelData } from './channel-data.ts';
 import { getSetup, saveSetup } from './channels.ts';
 import { applyPreview } from './apply.ts';
+import { cleanTimetable, createAssignment, getAutomation, listAssignments } from './automations.ts';
 import { aiAvailable, ask } from './ai.ts';
 import { cleanPool, type PoolDefinition, type PoolSource } from './pool.ts';
 import { parseSettings } from './shared/sort-settings.js';
@@ -101,6 +102,7 @@ export async function prefillFrom(channelId: string) {
     } as Look,
     pool,
     schedule: { sortId: setup.sortId, sortVersion: setup.sortVersion, values: setup.values, targetHours: setup.targetHours, alignStart: setup.alignStart },
+    automations: listAssignments(channelId).map(a => ({ automationId: a.automationId, name: a.automationName, timetable: a.timetable, values: a.values, enabled: a.enabled })),
   };
 }
 
@@ -110,12 +112,17 @@ export interface CreateInput {
   pool: unknown;
   schedule: { sortId?: number | null; sortVersion?: number | null; values?: Record<string, unknown>; targetHours?: number; alignStart?: boolean };
   previewId?: string;
+  /** Automations to add to the new channel, each with its timetable and setting values. */
+  automations?: Array<{ automationId: number; timetable?: unknown; values?: Record<string, unknown>; enabled?: boolean }>;
 }
 
 /** Creates the channel in Tunarr, saves its Schedule Lab setup, and applies the preview. */
 export async function createFromBuilder(input: CreateInput) {
   const pool = cleanPool(input.pool);
   if (input.schedule?.sortId) getVersion(Number(input.schedule.sortId), Number(input.schedule.sortVersion || getSort(Number(input.schedule.sortId)).latest_version));
+  // Check the automations before anything is created in Tunarr.
+  const autos = Array.isArray(input.automations) ? input.automations : [];
+  for (const a of autos) { getAutomation(Number(a.automationId)); if (a.timetable !== undefined) cleanTimetable(a.timetable); }
   const channel = await createChannel({ ...input.basics, look: lookToChannel(input.look) });
   const setup = saveSetup(channel.id, {
     sortId: input.schedule?.sortId ?? null,
@@ -131,7 +138,8 @@ export async function createFromBuilder(input: CreateInput) {
     try { apply = await applyPreview(channel.id, input.previewId, setup.alignStart, { adoptDraft: true }); }
     catch (err: any) { applyError = err?.message || String(err); }
   }
-  return { channel, setup, apply, applyError };
+  const automations = autos.map(a => createAssignment(channel.id, a));
+  return { channel, setup, apply, applyError, automations };
 }
 
 // ---------- optional AI help ----------

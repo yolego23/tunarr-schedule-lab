@@ -85,10 +85,13 @@ reshaping an existing one (the original isn't touched):
 
 1. **Basics:** name, group (or a new one), suggested number, and an optional
    description.
-2. **Content:** pick shows, seasons, movies and custom shows.
+2. **Content:** pick shows, seasons, single episodes, movies, custom shows
+   and smart collections.
 3. **Look & feel:** icon, watermark, stream mode, transcode profile, flex
    title, hidden from the guide, filler lists.
-4. **Schedule:** sort, its settings, lineup length.
+4. **Schedule:** sort, its settings, lineup length, and optionally
+   automations with their timetables and settings (copied too when you start
+   from an existing channel).
 5. **Preview & create:** preview the lineup before the channel exists, then
    **Create** makes the channel in Tunarr, saves its Schedule Lab setup and
    applies that lineup.
@@ -104,8 +107,10 @@ Each channel's **Episode pool** card (Channels screen) says where its episodes
 come from:
 
 - **+ Shows & movies:** search and browse your library; add whole shows,
-  single seasons, or movies.
+  single seasons (**Seasons**), single episodes (**Episodes**), or movies.
 - **+ Custom show:** a Tunarr custom show.
+- **+ Smart collection:** a Tunarr smart collection (a saved search made in
+  Tunarr); what it matches is read every time a lineup is built.
 - **Library rules** ("shows on Cartoon Network") now belong to automations.
   A channel that still has a rule from 2.1.0-beta.4–6 shows a **Convert**
   button: it swaps the rule for the shows it matches today and adds the
@@ -267,7 +272,7 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.7): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.8): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources, the Channel Builder and
   coded Automations with their library are done; library rules moved into
   automations.

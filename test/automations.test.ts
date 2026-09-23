@@ -25,6 +25,7 @@ const fake = http.createServer(async (req, res) => {
   const url = new URL(req.url!, 'http://x');
   const send = (d: unknown, status = 200) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(d)); };
   if (url.pathname === '/api/channels' && req.method === 'GET') return send([...channels.values()]);
+  if (url.pathname === '/api/smart_collections/sc1') return send({ uuid: 'sc1', name: 'Toons', keywords: '', filter: { type: 'value' } });
   if (url.pathname === '/api/programs/search') {
     return send({ results: [{ uuid: 'show1', type: 'show', title: 'Show One', year: 1999 }, { uuid: 'show2', type: 'show', title: 'Show Two', year: 2001 }], page: 0, totalPages: 1, totalHits: 2 });
   }
@@ -176,4 +177,11 @@ test('convert a library rule: picked shows plus an "Add new matching shows" assi
   assert.deepEqual(r.pool.sources.map(s => [s.kind, s.ref, s.weight]), [['show', 'show1', 2], ['show', 'show2', 2]]);
   assert.equal(r.assignment!.values.networks, 'Cartoon Network');
   assert.equal(r.assignment!.automationName, 'Add new matching shows');
+});
+
+test('a smart collection source reads what its saved search matches', async () => {
+  const { resolvePool } = await import('../src/pool.ts');
+  const r = await resolvePool({ sources: [{ id: 's', kind: 'smart_collection', ref: 'sc1', label: 'Toons', weight: 1 }], exclusions: [] });
+  assert.equal(r.items.length, 6);
+  assert.deepEqual(r.sources[0].matches!.map(m => m.title), ['Show One', 'Show Two']);
 });

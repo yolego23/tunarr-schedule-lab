@@ -10,7 +10,7 @@ import { tunarr } from './tunarr.ts';
 import { HttpError } from './sorts.ts';
 import { normalizeProgram, type PoolItem } from './channel-data.ts';
 
-export type SourceKind = 'show' | 'season' | 'movie' | 'episode' | 'custom_show' | 'rule';
+export type SourceKind = 'show' | 'season' | 'movie' | 'episode' | 'custom_show' | 'smart_collection' | 'rule';
 
 export interface PoolRule {
   text?: string;
@@ -48,7 +48,7 @@ export interface PoolDefinition {
 
 export const EMPTY_POOL: PoolDefinition = { sources: [], exclusions: [] };
 
-const KINDS: SourceKind[] = ['show', 'season', 'movie', 'episode', 'custom_show', 'rule'];
+const KINDS: SourceKind[] = ['show', 'season', 'movie', 'episode', 'custom_show', 'smart_collection', 'rule'];
 
 /** Checks and cleans a pool definition from the browser. */
 export function cleanPool(input: any): PoolDefinition {
@@ -166,11 +166,13 @@ export async function ruleOptions() {
     try { return Object.entries((await tunarr.facetValues(field)).facetValues || {}).sort((a, b) => b[1] - a[1]).map(([value, count]) => ({ value, count })); }
     catch { return []; }
   };
-  const [networks, genres, ratings, sources, customShows] = await Promise.all([
+  const [networks, genres, ratings, sources, customShows, smartCollections] = await Promise.all([
     facet('studio.name'), facet('grandparent.genres'), facet('rating'), tunarr.mediaSources().catch(() => []), tunarr.customShows().catch(() => []),
+    tunarr.smartCollections().catch(() => []),
   ]);
   const libraries = sources.flatMap(s => (s.libraries || []).filter(l => l.mediaType !== 'tracks').map(l => ({ id: l.id, name: l.name, type: l.mediaType, source: s.name })));
-  return { networks, genres, ratings, libraries, customShows: customShows.map(c => ({ id: c.id, name: c.name, count: c.contentCount, durationMs: c.totalDuration })) };
+  return { networks, genres, ratings, libraries, customShows: customShows.map(c => ({ id: c.id, name: c.name, count: c.contentCount, durationMs: c.totalDuration })),
+    smartCollections: smartCollections.map(c => ({ id: c.uuid, name: c.name })) };
 }
 
 // ---------- resolving a pool into episodes ----------
@@ -217,6 +219,19 @@ async function mapLimit<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): 
   return out;
 }
 
+/** Everything a Tunarr smart collection (a saved search) matches today. */
+async function smartCollectionMatches(id: string): Promise<LibraryHit[]> {
+  const sc = await tunarr.smartCollection(id);
+  const text = (sc.keywords || '').trim();
+  const out: LibraryHit[] = [];
+  for (let page = 1; page <= 40; page++) {
+    const r = await tunarr.searchPrograms({ query: { ...(text ? { query: text } : {}), ...(sc.filter ? { filter: sc.filter } : {}) }, page: tunarrPage(page, !!text), limit: 100 });
+    out.push(...(r.results || []).map(toHit));
+    if (page >= (r.totalPages || 1)) break;
+  }
+  return out;
+}
+
 export interface ResolvedPool {
   items: Array<PoolItem & { weight: number; sources: string[] }>;
   sources: Array<{ id: string; label: string; kind: SourceKind; shows: number; episodes: number; durationMs: number; matches?: LibraryHit[]; error?: string }>;
@@ -233,6 +248,10 @@ export async function resolvePool(def: PoolDefinition): Promise<ResolvedPool> {
     let error: string | undefined;
     try {
       if (src.kind === 'custom_show') items = await customShowItems(src.ref!);
+      else if (src.kind === 'smart_collection') {
+        matches = await smartCollectionMatches(src.ref!);
+        items = (await mapLimit(matches, 4, m => episodesUnder(m.id))).flat();
+      }
       else if (src.kind === 'rule') {
         matches = await ruleMatches(src.rule!);
         items = (await mapLimit(matches, 4, m => episodesUnder(m.id))).flat();

@@ -106,3 +106,16 @@ test('prefill from an existing channel turns its shows into picked sources and c
   const p2 = await builder.prefillFrom('src');
   assert.deepEqual(p2.pool.sources.map(s => s.ref), ['show1']);
 });
+
+test('the builder can add automations; a bad timetable stops it before anything is created', async () => {
+  const auto = await import('../src/automations.ts');
+  const a = auto.createAutomation({ name: 'Rebuild', code: 'async function run(ctx){}' });
+  const before = channels.size;
+  await assert.rejects(builder.createFromBuilder({ basics: { name: 'Nope' }, pool, schedule: {}, automations: [{ automationId: a.id, timetable: { kind: 'weekly', days: [] } }] }), /at least one day/);
+  assert.equal(channels.size, before, 'no channel was created');
+  const r = await builder.createFromBuilder({ basics: { name: 'With automation' }, pool, schedule: {}, automations: [{ automationId: a.id, timetable: { kind: 'daily', at: '02:00' }, values: { x: 1 } }] });
+  assert.equal(r.automations.length, 1);
+  const list = auto.listAssignments(r.channel.id);
+  assert.deepEqual([list[0].automationName, list[0].timetable.kind, list[0].values.x], ['Rebuild', 'daily', 1]);
+  assert.equal((await builder.prefillFrom(r.channel.id)).automations.length, 1, 'copying the channel in the builder brings its automations');
+});

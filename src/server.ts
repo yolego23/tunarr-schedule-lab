@@ -6,7 +6,7 @@ import path from 'node:path';
 import { config } from './config.ts';
 import { db, transaction } from './db.ts';
 import { tunarr, TunarrError } from './tunarr.ts';
-import { getChannelData } from './channel-data.ts';
+import { getChannelData, normalizeProgram } from './channel-data.ts';
 import { getSetup, listChannels, saveSetup } from './channels.ts';
 import {
   HttpError, createSort, deleteSort, duplicateSort, exportSort, getSort, getVersion, importPresets, importSortFile, listSorts, saveVersion, updateSort,
@@ -108,6 +108,10 @@ route('GET', '/api/library/search', ({ query }) => searchLibrary({
 }));
 route('POST', '/api/library/rule-search', ({ body }) => searchLibrary({ rule: body?.rule, page: Number(body?.page) || 1 }));
 route('GET', '/api/library/children/:id', async ({ params }) => (await tunarr.seasons(params.id)));
+route('GET', '/api/library/episodes/:id', async ({ params }) => (await tunarr.descendants(params.id))
+  .filter(r => r.type === 'content' && r.id).map(r => normalizeProgram(r.id, r))
+  .sort((a, b) => (a.seasonNumber ?? 0) - (b.seasonNumber ?? 0) || (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0))
+  .map(p => ({ id: p.id, title: p.title, episodeLabel: p.episodeLabel, durationMs: p.durationMs })));
 /** What a pool definition resolves to, without saving it. */
 route('POST', '/api/pool/resolve', async ({ body, query }) => {
   if (query.get('fresh') === '1') forgetPoolCache();

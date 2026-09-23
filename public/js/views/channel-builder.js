@@ -6,6 +6,7 @@ import { findSort, loadChannels, loadGlobals, loadSettings, loadSorts, selectCha
 import { poolEditor } from '../components/pool-editor.js';
 import { settingsForm } from '../components/settings-form.js';
 import { lineupSummary, repeatRanking, timeline } from '../components/timeline.js';
+import { describeTimetable, timetableEditor } from '../components/automations.js';
 import { parseSettings } from '/shared/sort-settings.js';
 
 const STEPS = ['Basics', 'Content', 'Look & feel', 'Schedule', 'Preview & create'];
@@ -23,6 +24,7 @@ function freshDraft() {
     look: { iconUrl: '', watermarkEnabled: false, watermarkUrl: '', watermarkPosition: 'bottom-right', streamMode: 'hls', transcodeConfigId: '', stealth: false, guideFlexTitle: '', fillerListIds: [] },
     pool: { sources: [], exclusions: [] },
     schedule: { sortId: null, sortVersion: null, values: {}, targetHours: store.settings?.channelDefaults?.targetHours || 168, alignStart: store.settings?.channelDefaults?.alignStart !== false },
+    automations: [], // { automationId, name, timetable, values, enabled }
     startMs: nowMinute(),
     preview: null,
     dirty: false,
@@ -140,7 +142,8 @@ export async function render(root, { go }) {
         draft.look = { ...draft.look, ...p.look };
         draft.pool = p.pool;
         draft.schedule = { ...draft.schedule, ...Object.fromEntries(Object.entries(p.schedule).filter(([, v]) => v !== null && v !== undefined)) };
-        toast(`Filled in from that channel: ${p.pool.sources.length} pool sources${p.schedule.sortId ? ' and its sort' : ''}.`, 'ok');
+        draft.automations = p.automations || [];
+        toast(`Filled in from that channel: ${p.pool.sources.length} pool sources${p.schedule.sortId ? ', its sort' : ''}${draft.automations.length ? ` and ${draft.automations.length} automation(s)` : ''}.`, 'ok');
       } catch (err) { toast(err.message, 'err'); }
     }
     touch();
@@ -228,6 +231,35 @@ export async function render(root, { go }) {
         settingsForm({ settings, values: s.values, globals: store.globals, onChange: vals => { s.values = vals; touch(); } }));
     }
     drawSettings();
+
+    // Optional automations for the new channel.
+    const autoBox = h('div', { class: 'card' });
+    async function drawAutomations() {
+      let library = [];
+      try { library = await api('GET', '/api/automations'); } catch (err) { clear(autoBox, h('p', { class: 'err-text small' }, err.message)); return; }
+      const add = h('select', { onchange: () => {
+        const a = library.find(x => x.id === Number(add.value));
+        if (!a) return;
+        draft.automations.push({ automationId: a.id, name: a.name, timetable: { kind: 'weekly', days: ['Sun'], at: null }, values: {}, enabled: true });
+        touch();
+        drawAutomations();
+      } }, h('option', { value: '' }, '+ Add an automation…'), library.map(a => h('option', { value: a.id }, a.name)));
+      const rows = await Promise.all(draft.automations.map(async (a, i) => {
+        const lib = library.find(x => x.id === a.automationId);
+        return h('div', { class: 'assignment' },
+          h('div', { class: 'btn-row' }, h('b', null, a.name), lib ? h('span', { class: 'mono dim' }, `v${lib.latest_version}`) : h('span', { class: 'err-text small' }, 'no longer in the library'),
+            h('span', { class: 'dim small' }, describeTimetable(a.timetable)), h('span', { style: { flex: 1 } }),
+            h('button', { class: 'btn small ghost', onclick: () => { draft.automations.splice(i, 1); touch(); drawAutomations(); } }, 'Remove')),
+          timetableEditor({ value: a.timetable, onChange: () => touch() }),
+          lib ? settingsForm({ settings: lib.settings, values: a.values, globals: store.globals, emptyText: 'This automation declares no settings.', onChange: v => { a.values = v; touch(); } }) : null);
+      }));
+      clear(autoBox,
+        h('div', { class: 'card-head' }, h('h3', null, 'Automations (optional)'),
+          library.length ? add : h('button', { class: 'btn small', onclick: e => busy(e.currentTarget, async () => { await api('POST', '/api/automations/import-presets'); drawAutomations(); }) }, 'Import starter automations')),
+        draft.automations.length ? rows : h('p', { class: 'dim small' }, 'For example a weekly rebuild, or one that suggests new matching shows. They are added when the channel is created, and can be changed later on the Channels screen.'));
+    }
+    drawAutomations();
+
     return h('div', null,
       h('div', { class: 'card' }, h('h3', null, 'Sort'),
         h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Sort from the library'), sortSelect),
@@ -236,7 +268,8 @@ export async function render(root, { go }) {
         h('div', { class: 'row' },
           h('label', { class: 'field' }, h('span', { class: 'lab' }, 'Lineup length (hours)'), h('input', { type: 'number', min: 1, value: String(s.targetHours), oninput: e => { s.targetHours = Number(e.target.value) || 168; touch(); } })),
           h('div', null, h('label', { class: 'check', style: { marginTop: '18px' } },
-            h('input', { type: 'checkbox', checked: s.alignStart, onchange: e => { s.alignStart = e.target.checked; touch(); } }), 'Start the lineup at the preview\'s start time')))));
+            h('input', { type: 'checkbox', checked: s.alignStart, onchange: e => { s.alignStart = e.target.checked; touch(); } }), 'Start the lineup at the preview\'s start time')))),
+      autoBox);
   }
 
   // ---------- 5. preview & create ----------
@@ -264,12 +297,14 @@ export async function render(root, { go }) {
       const lines = [
         `Create ${b.number || '(next free number)'} ${b.name} in group "${groupName}" in Tunarr,`,
         `with ${draft.pool.sources.length} pool sources and ${findSort(draft.schedule.sortId)?.name}.`,
+        draft.automations.length ? `Add ${draft.automations.length} automation(s): ${draft.automations.map(a => a.name).join(', ')}.` : null,
         draft.preview ? `Then apply the previewed lineup: ${draft.preview.items.length} items, ${fmtDur(draft.preview.durationMs)}.` : 'No lineup is applied (no preview was run); the channel starts empty.',
       ];
-      if (!(await confirmDialog({ title: 'Create channel', message: lines.join('\n'), confirmLabel: 'Create', danger: true }))) return;
+      if (!(await confirmDialog({ title: 'Create channel', message: lines.filter(Boolean).join('\n'), confirmLabel: 'Create', danger: true }))) return;
       const r = await api('POST', '/api/builder/create', {
         basics: { name: b.name, number: b.number === '' ? undefined : Number(b.number), groupTitle: groupName },
         look: draft.look, pool: draft.pool, schedule: draft.schedule, previewId: draft.preview?.previewId,
+        automations: draft.automations.map(a => ({ automationId: a.automationId, timetable: a.timetable, values: a.values, enabled: a.enabled !== false })),
       });
       if (r.applyError) toast(`Created the channel, but applying the lineup failed: ${r.applyError}. Open it on the Channels screen to preview and apply again.`, 'err', 15000);
       else toast(`Created ${r.channel.number} ${String(r.channel.name).trim()}${r.apply ? ` and applied ${r.apply.itemCount} items` : ''}.`, 'ok', 8000);
@@ -305,7 +340,8 @@ export async function render(root, { go }) {
           h('span', { class: 'k' }, 'Channel'), h('span', null, `${b.number || '(next free)'} · ${b.name || '—'} · group ${groupName || '—'}`),
           h('span', { class: 'k' }, 'Pool'), h('span', null, `${draft.pool.sources.length} sources${draft.pool.exclusions.length ? `, ${draft.pool.exclusions.length} excluded` : ''}`),
           h('span', { class: 'k' }, 'Sort'), h('span', null, draft.schedule.sortId ? `${findSort(draft.schedule.sortId)?.name} v${draft.schedule.sortVersion}` : '—'),
-          h('span', { class: 'k' }, 'Lineup'), h('span', null, fmtDur(draft.schedule.targetHours * 3_600_000))),
+          h('span', { class: 'k' }, 'Lineup'), h('span', null, fmtDur(draft.schedule.targetHours * 3_600_000)),
+          h('span', { class: 'k' }, 'Automations'), h('span', null, draft.automations.length ? draft.automations.map(a => a.name).join(', ') : '—')),
         h('div', { class: 'row', style: { marginTop: '12px', alignItems: 'flex-end' } },
           h('label', { class: 'field', style: { maxWidth: '260px' } }, h('span', { class: 'lab' }, 'Lineup starts'), start),
           h('div', { class: 'btn-row', style: { marginBottom: '12px' } }, runBtn, createBtn))),

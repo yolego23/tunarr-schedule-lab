@@ -539,7 +539,7 @@ function showTitleOf(data: ChannelData) {
 }
 
 function checkSource(s: any): Omit<PoolSource, 'id'> & { ref: string } {
-  const kinds = ['show', 'season', 'movie', 'episode', 'custom_show'];
+  const kinds = ['show', 'season', 'movie', 'episode', 'custom_show', 'smart_collection'];
   if (!kinds.includes(s?.kind)) throw new Error(`Pool sources an automation adds must be one of: ${kinds.join(', ')}.`);
   if (!s.ref || typeof s.ref !== 'string') throw new Error('The source needs ref: the Tunarr id of the show, season, movie, episode or custom show.');
   const weight = s.weight === undefined ? 1 : Number(s.weight);
@@ -753,6 +753,7 @@ async function execute(runId: number, spec: { channelId: string; code: string; s
     // Tunarr down: try again later, as long as nothing was changed yet.
     retry = unreachable(message) && !st.changes.some(c => !c.dryRun);
   }
+  if (st.aiCalls) logs = [...logs, `AI: ${st.aiCalls} call${st.aiCalls === 1 ? '' : 's'} (tokens and cost under Settings → AI usage).`];
   const row = db.prepare('SELECT attempt, trigger FROM automation_runs WHERE id = ?').get(runId) as { attempt: number; trigger: string };
   const s = appSetting('automations');
   if (retry && row.trigger !== 'test' && row.attempt <= s.retries) {

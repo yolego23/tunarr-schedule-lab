@@ -33,7 +33,7 @@ export async function render(root) {
     }),
     settingCard({
       title: 'Automations',
-      note: 'Timetables without a set time run somewhere in this window, at a different spot for each channel. Runs wait in one queue; the time limit counts only the automation's own code (not the sorts it builds, applies or AI calls). Runs that fail because Tunarr can't be reached are tried again.',
+      note: 'Timetables without a set time run somewhere in this window, at a different spot for each channel. Runs wait in one queue; the time limit counts only the automation’s own code (not the sorts it builds, applies or AI calls). Runs that fail because Tunarr can’t be reached are tried again.',
       key: 'automations',
       fields: v => [
         checkField('Run automations on their timetables', v.enabled, x => { v.enabled = x; }),

@@ -13,7 +13,7 @@ export function libraryOptions() {
 // crypto.randomUUID() needs HTTPS or localhost; the app is often opened by LAN IP.
 const newId = () => 'src-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
-const KIND_LABEL = { show: 'show', season: 'season', movie: 'movie', episode: 'episode', custom_show: 'custom show', rule: 'rule' };
+const KIND_LABEL = { show: 'show', season: 'season', movie: 'movie', episode: 'episode', custom_show: 'custom show', smart_collection: 'smart collection', rule: 'rule' };
 
 /**
  * poolEditor({ pool, lineupEpisodes, onChange, allowRules, onConvertRule }) -> element
@@ -44,7 +44,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
     const s = resolved?.sources?.find(x => x.id === src.id || (x.label === src.label && x.kind === src.kind));
     if (!s) return resolving ? '…' : '';
     if (s.error) return h('span', { class: 'err-text' }, s.error);
-    return `${s.kind === 'rule' ? `${s.shows} shows · ` : ''}${s.episodes} episodes · ${fmtDur(s.durationMs)}`;
+    return `${s.kind === 'rule' || s.kind === 'smart_collection' ? `${s.shows} shows · ` : ''}${s.episodes} episodes · ${fmtDur(s.durationMs)}`;
   }
 
   function draw() {
@@ -78,6 +78,7 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
           h('button', { class: 'btn small', onclick: () => browseDialog() }, '+ Shows & movies'),
           allowRules ? h('button', { class: 'btn small', onclick: () => ruleDialog(null) }, '+ Rule') : null,
           h('button', { class: 'btn small', onclick: () => customShowDialog() }, '+ Custom show'),
+          h('button', { class: 'btn small', title: 'A Tunarr smart collection (a saved search); what it matches is read every time a lineup is built', onclick: () => smartCollectionDialog() }, '+ Smart collection'),
           pool.sources.length ? h('button', { class: 'btn small ghost', onclick: () => episodesDialog() }, 'Shows in pool') : null)),
       header,
       pool.sources.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'grid' },
@@ -132,6 +133,16 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
                   return h('button', { class: 'btn small' + (has('season', sn.uuid) ? ' active' : ''), onclick: () => add('season', sn.uuid, label) }, sn.title || 'Season ' + sn.index);
                 })));
               }) }, 'Seasons') : null,
+              hit.type === 'show' ? h('button', { class: 'btn small ghost', title: 'Pick single episodes', onclick: e => busy(e.currentTarget, async () => {
+                const eps = await api('GET', '/api/library/episodes/' + hit.id);
+                const drawEps = () => clear(seasons, h('div', { style: { maxHeight: '240px', overflowY: 'auto', marginTop: '4px' } },
+                  h('table', { class: 'grid' }, h('tbody', null, eps.map(ep => h('tr', null,
+                    h('td', { class: 'small' }, ep.episodeLabel ? h('span', { class: 'mono dim' }, ep.episodeLabel + ' ') : null, ep.title),
+                    h('td', { class: 'actions' }, has('episode', ep.id)
+                      ? h('span', { class: 'pill ok' }, 'added')
+                      : h('button', { class: 'btn small', onclick: () => { add('episode', ep.id, `${hit.title} · ${ep.episodeLabel ? ep.episodeLabel + ' ' : ''}${ep.title}`); drawEps(); } }, 'Add'))))))));
+                drawEps();
+              }) }, 'Episodes') : null,
               has(hit.type, hit.id)
                 ? h('span', { class: 'pill ok' }, 'added')
                 : h('button', { class: 'btn small primary', onclick: () => add(hit.type, hit.id, hit.title + (hit.year ? ` (${hit.year})` : '')) }, hit.type === 'show' ? 'Add show' : 'Add movie')));
@@ -234,6 +245,22 @@ export function poolEditor({ pool, lineupEpisodes, onChange, allowRules = true, 
               ? h('span', { class: 'pill ok' }, 'added')
               : h('button', { class: 'btn small primary', onclick: () => { pool.sources.push({ id: newId(), kind: 'custom_show', ref: c.id, label: c.name, weight: 1 }); changed(); close(); } }, 'Add'))))))
         : h('p', { class: 'dim' }, 'Tunarr has no custom shows yet.'),
+    });
+  }
+
+  async function smartCollectionDialog() {
+    let opts;
+    try { opts = await libraryOptions(); } catch (err) { toast(err.message, 'err'); return; }
+    const list = opts.smartCollections || [];
+    const close = modal({
+      title: 'Add a smart collection',
+      body: list.length
+        ? h('table', { class: 'grid' }, h('tbody', null, list.map(c => h('tr', null,
+            h('td', null, c.name),
+            h('td', { class: 'actions' }, pool.sources.some(s => s.kind === 'smart_collection' && s.ref === c.id)
+              ? h('span', { class: 'pill ok' }, 'added')
+              : h('button', { class: 'btn small primary', onclick: () => { pool.sources.push({ id: newId(), kind: 'smart_collection', ref: c.id, label: c.name, weight: 1 }); changed(); close(); } }, 'Add'))))))
+        : h('p', { class: 'dim' }, 'Tunarr has no smart collections yet. Make one in Tunarr (a saved library search), then add it here.'),
     });
   }
 

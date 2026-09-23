@@ -52,6 +52,9 @@ Automations, Settings (global settings and global variables).
   - Channels "+ New" opens the Channel Builder (2.1.0-beta.6).
   - Coded Automations + Automation Library; library rules moved out of the Pool card (Convert button)
     into the "Add new matching shows" automation (done in 2.1.0-beta.7).
+  - Builder step 4 adds automations; smart collections and single episodes as pool sources; AI call
+    count in run logs; fix for the Settings screen not loading in beta.7 (2.1.0-beta.8).
+  - 2.1.0 = the owner has tested all of 2.1 on the server.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via
     `POST /api/programs/facets/{field}`); the show's network is `studio.name` on show records.
@@ -74,6 +77,9 @@ Automations, Settings (global settings and global variables).
   `npm test`, `npm run typecheck`. Local dev uses port 8766; 8765 is often the 1.8 `lab-server.py`.
 - `src/tunarr.ts` is the only module that calls Tunarr. `src/sandbox/` runs sort code in a
   child process (`--permission`) inside a `DONT_CONTEXTIFY` vm context; only strings cross.
+- `test/ui-syntax.test.ts` runs `node --check` on every browser file (no build step, so a syntax
+  error otherwise only shows when a screen is opened). Write patch scripts to files (not bash
+  heredocs): Git Bash heredocs mangled `\\'` and `\\n` escapes and broke a screen once.
 - `src/shared/*.js` (weekly hours, settings parser, analysis) is shared by server, browser
   (served at `/shared/`) and sandbox (loaded as a script, `export ` stripped), so no imports there.
 - UI is plain ES modules in `public/js` (no framework, no bundler).
@@ -94,7 +100,8 @@ Automations, Settings (global settings and global variables).
   lineup in `channel_archive`; recreate uses the same id. Guide check (`src/guide-check.ts`) compares
   expectations saved on apply/restore with `/api/guide/channels/{id}` and the XMLTV file.
 - Pool sources (`src/pool.ts`): `channel_setup.pool_json` = { sources, exclusions }. Kinds: show, season,
-  movie, episode (all via `/api/programs/{id}/descendants`), custom_show, rule (search, then descendants).
+  movie, episode (all via `/api/programs/{id}/descendants`), custom_show, smart_collection (its saved
+  filter + keywords through search, then descendants), rule (search, then descendants).
   Tunarr search pages are 0-based. Items get `weight` (max of sources) and `sources`; sorts decide use.
   With sources, `getChannelData` builds `pool` from them; `lineupItems` keeps lineup episodes not in it.
 - Channel Builder (`src/builder.ts`, `public/js/views/channel-builder.js`): previews a draft with
