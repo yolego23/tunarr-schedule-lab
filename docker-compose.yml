@@ -1,7 +1,9 @@
 services:
   schedule-lab:
+    # Published by GitHub Actions on every push to main.
+    image: ghcr.io/yolego23/tunarr-schedule-lab:latest
+    # To build from this folder instead: docker compose up -d --build
     build: .
-    image: schedule-lab:2.0
     container_name: schedule-lab
     restart: unless-stopped
     ports:

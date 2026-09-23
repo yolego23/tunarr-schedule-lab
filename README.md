@@ -6,11 +6,19 @@ server, so there are no browser CORS problems and no `lab-server.py`.
 
 ## Run it
 
-On the Docker server:
+On the Docker server, copy `docker-compose.yml` into a folder and run:
 
 ```bash
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+The image `ghcr.io/yolego23/tunarr-schedule-lab:latest` (amd64 and arm64) is
+built and published by GitHub Actions on every push to `main`, after the tests
+pass. Tag a release (`git tag v2.0.1 && git push --tags`) to also get a pinned
+`:2.0.1` image. To build locally instead, run `docker compose up -d --build`
+from a checkout.
+
+To update later: `docker compose pull && docker compose up -d`.
 
 Then open `http://<that-server>:8765/`. The only required setting is
 `TUNARR_URL` in `docker-compose.yml` (now `http://192.168.1.197:8000`). Set
