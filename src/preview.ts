@@ -1,7 +1,8 @@
 // Runs sorts against a channel's pool and keeps the resulting lineups
 // ("previews") in memory so Apply can write exactly what was previewed.
 import { randomUUID } from 'node:crypto';
-import { getChannelData, type ChannelData } from './channel-data.ts';
+import { getChannelData, lastAiredMap, type ChannelData } from './channel-data.ts';
+import { historyForSort } from './watch.ts';
 import { getSetup } from './channels.ts';
 import { runSort, SortError, type SortOutputItem } from './sandbox/index.ts';
 import { HttpError, getSort, getVersion } from './sorts.ts';
@@ -69,6 +70,7 @@ function sortInput(data: ChannelData, params: Record<string, unknown>, targetMs:
     scheduleStartMs,
     channel: { id: data.channelId, name: data.name, number: data.number },
     globals: globalsForSorts(),
+    history: { ...historyForSort(data.channelId, data.pool.map(p => p.id)), lastAired: lastAiredMap(data) },
   };
 }
 

@@ -59,6 +59,23 @@ use a VPN to reach it from outside.
    colours, backups kept per channel, the sort time limit, and **global
    variables**.
 
+## Watch Tracker
+
+Tunarr keeps no viewing history, so Schedule Lab records its own. Every minute
+it checks which channels have an open stream and what they're playing. An
+episode that streams for 5 minutes (a setting) is marked as watched on that
+channel, with the date and time and how many minutes were streamed. The
+newest 5 watches per episode per channel are kept (a setting; there's also an
+optional age limit), and a total watch count keeps counting. Nothing about
+devices is stored. It can't tell who is watching, or whether anyone is: an
+open stream counts.
+
+Sorts read it through `ctx.history`: `lastWatched(id)`, `watchCount(id)`,
+`watches(id)` (newest first, `{ at, minutes }`), with `{ anyChannel: true }`
+for all channels, plus `lastAired(id)` from the channel's lineup. Preview
+timelines tag episodes already watched on the channel. The Watch Tracker
+screen shows what's streaming now and the log, where watches can be deleted.
+
 ## Global variables
 
 Named values on the Settings screen (number, text, secret, yes/no, weekly
@@ -122,7 +139,8 @@ npm run dev
 
 ## Coming next
 
-- **2.1**: Watch Tracker and `ctx.history`, filler padding, guide check after
-  Apply, Automations with per-channel timetables, create/copy/rename/delete channels.
+- **2.1**: filler padding, guide check after Apply, Automations with
+  per-channel timetables (using the watch history), create/copy/rename/delete channels.
+  (The Watch Tracker and `ctx.history` are done.)
 - **2.2**: library search for pools, custom shows and smart collections as
   pools, checks across channels, append applies, export as a time-slot schedule.

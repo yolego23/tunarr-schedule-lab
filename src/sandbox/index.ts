@@ -31,6 +31,12 @@ export interface SortInput {
   channel: { id: string; name: string; number: number };
   /** Global variables, as ctx.globals. */
   globals: Record<string, unknown>;
+  /** Watch history and last-aired times, behind ctx.history. */
+  history?: {
+    channel: Record<string, { total: number; last: number | null; watches: Array<{ at: number; minutes: number }> }>;
+    any: Record<string, { total: number; last: number | null; watches: Array<{ at: number; minutes: number; channelId?: string }> }>;
+    lastAired: Record<string, number>;
+  };
 }
 
 export type SortOutputItem = { id: string } | { type: 'flex'; durationMs: number } | { ci: number };

@@ -40,6 +40,7 @@ export async function render(root, { params, go }) {
   const viewEls = Object.entries(viewBtns).map(([k, label]) => h('button', { class: 'btn small', onclick: () => { state.view = k; drawRight(); } }, label));
   let scoreEditor = null;
   let away = null;
+  let watched = null; // Watch Tracker summary for this channel
 
   clear(root, h('div', { class: 'screen three' },
     h('div', { class: 'panel' },
@@ -107,6 +108,8 @@ export async function render(root, { params, go }) {
     if (ch && !state.include.size && ch.setup.sortId) state.include.add(ch.setup.sortId);
     drawSorts();
     away = null;
+    watched = null;
+    if (state.channelId) watched = await api('GET', `/api/watch/summary/${encodeURIComponent(state.channelId)}`).catch(() => null);
     if (ch?.setup.sortId) {
       // Shade rows that fall inside the channel's weekly hours settings (e.g. work and sleep).
       try {
@@ -215,7 +218,7 @@ export async function render(root, { params, go }) {
         const items = all.slice(data.playingIndex).concat(all.slice(0, data.playingIndex));
         const startMs = Date.now() - data.playingOffsetMs;
         summary.textContent = `${lineupSummary(items)} · from what's playing now`;
-        clear(right, legend, timeline({ items, startMs, thresholds, nowIndex: 0, away: away?.helper }));
+        clear(right, legend, timeline({ items, startMs, thresholds, nowIndex: 0, away: away?.helper, watched }));
       }).catch(err => clear(right, h('div', { class: 'empty' }, h('b', null, 'Could not load the lineup'), err.message)));
       clear(right, h('div', { class: 'empty' }, h('span', { class: 'spinner' }), ' Loading lineup…'));
       return;
@@ -230,7 +233,7 @@ export async function render(root, { params, go }) {
     summary.textContent = `${cand.label} · ${lineupSummary(items, currentIds)}`;
     clear(right, legend, state.view === 'ranking'
       ? repeatRanking({ items, startMs: cand.scheduleStartMs, thresholds })
-      : timeline({ items, startMs: cand.scheduleStartMs, thresholds, newAgainst: currentIds, away: away?.helper }));
+      : timeline({ items, startMs: cand.scheduleStartMs, thresholds, newAgainst: currentIds, away: away?.helper, watched }));
   }
 
   applyBtn.onclick = () => {

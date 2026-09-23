@@ -9,7 +9,7 @@ const SCREENS = [
   { path: 'library', label: 'Sort Library', load: () => import('./views/library.js') },
   { path: 'preview', label: 'Preview & Compare', load: () => import('./views/preview.js') },
   { path: 'apply', label: 'Apply & History', load: () => import('./views/apply.js') },
-  { path: 'watch', label: 'Watch Tracker', later: '2.1', load: () => import('./views/later.js') },
+  { path: 'watch', label: 'Watch Tracker', load: () => import('./views/watch.js') },
   { path: 'automations', label: 'Automations', later: '2.1', load: () => import('./views/later.js') },
   { path: 'settings', label: 'Settings', load: () => import('./views/settings.js') },
 ];

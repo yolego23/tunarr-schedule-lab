@@ -17,6 +17,7 @@ import { NEW_SORT_CODE } from './presets.ts';
 import { allSettings, resetAppSetting, saveAppSetting } from './app-settings.ts';
 import { deleteGlobal, listGlobals, saveGlobal } from './globals.ts';
 import { storageStatus } from './storage-check.ts';
+import { channelWatchSummary, deleteWatches, listWatches, tracker, watchCounts } from './watch.ts';
 
 const APP_VERSION = JSON.parse(fs.readFileSync(path.join(config.publicDir, '..', 'package.json'), 'utf8')).version as string;
 
@@ -98,6 +99,15 @@ route('GET', '/api/backups/:id', ({ params }) => getBackupFile(num(params.id)));
 route('POST', '/api/backups/:id/restore', ({ params }) => restoreBackup(num(params.id)));
 route('GET', '/api/history', ({ query }) => listHistory(query.get('channelId') || undefined));
 
+// ---------- watch tracker ----------
+route('GET', '/api/watch/status', () => ({ ...tracker.status(), ...watchCounts() }));
+route('GET', '/api/watch', ({ query }) => listWatches({
+  channelId: query.get('channelId') || undefined, limit: Number(query.get('limit')) || 100, before: Number(query.get('before')) || undefined,
+}));
+route('GET', '/api/watch/summary/:channelId', ({ params }) => channelWatchSummary(params.channelId));
+route('DELETE', '/api/watch/:id', ({ params }) => ({ deleted: deleteWatches({ id: num(params.id) }) }));
+route('DELETE', '/api/watch', ({ query }) => ({ deleted: deleteWatches({ channelId: query.get('channelId') || undefined }) }));
+
 // ---------- global settings ----------
 route('GET', '/api/settings', () => allSettings());
 route('PUT', '/api/settings/:key', ({ params, body }) => ({ value: saveAppSetting(params.key, body?.value) }));
@@ -117,6 +127,8 @@ route('GET', '/api/export', ({ query }) => {
     sortVersions: db.prepare('SELECT * FROM sort_versions').all(),
     channelSetup: db.prepare('SELECT * FROM channel_setup').all(),
     globalVars: db.prepare('SELECT * FROM global_vars').all(),
+    watchEvents: db.prepare('SELECT * FROM watch_events').all(),
+    watchTotals: db.prepare('SELECT * FROM watch_totals').all(),
     applyLog: db.prepare('SELECT * FROM apply_log').all(),
   };
   if (query.get('backups') === '1') data.backups = db.prepare('SELECT * FROM backups').all();
@@ -126,7 +138,7 @@ route('POST', '/api/import', ({ body }) => {
   if (body?.kind !== 'schedule-lab-export') throw new HttpError(400, 'This is not a Schedule Lab export file.');
   const tables: Array<[string, unknown]> = [
     ['app_settings', body.appSettings], ['sorts', body.sorts], ['sort_versions', body.sortVersions],
-    ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['apply_log', body.applyLog], ['backups', body.backups],
+    ['channel_setup', body.channelSetup], ['global_vars', body.globalVars], ['watch_events', body.watchEvents], ['watch_totals', body.watchTotals], ['apply_log', body.applyLog], ['backups', body.backups],
   ];
   const counts: Record<string, number> = {};
   transaction(() => {
@@ -215,10 +227,12 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`[lab] Data: ${storage.dbFile}${storage.volume ? ` (volume ${storage.volume})` : ''}: ${count('SELECT count(*) AS n FROM sorts')} sorts, `
     + `${count('SELECT count(*) AS n FROM channel_setup WHERE sort_id IS NOT NULL')} channels with a sort, ${count('SELECT count(*) AS n FROM backups')} backups`);
   if (storage.warning) console.warn(`[lab] WARNING: ${storage.warning}`);
+  if (config.tunarrUrl) tracker.start();
 });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, () => {
+    tracker.stop();
     server.close();
     db.close();
     process.exit(0);

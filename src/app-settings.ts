@@ -13,6 +13,15 @@ export interface AppSettings {
   backupsPerChannel: number;
   sortTimeLimitSec: number;
   scoreCode: string;
+  watchTracker: {
+    enabled: boolean;
+    /** Minutes an episode must stream before it counts as watched. */
+    minMinutes: number;
+    /** Watches kept per episode per channel (newest first). */
+    keepPerEpisode: number;
+    /** Forget watches older than this many days; 0 = keep until pushed out by newer ones. */
+    maxAgeDays: number;
+  };
 }
 
 export const SETTING_DEFAULTS: AppSettings = {
@@ -22,6 +31,7 @@ export const SETTING_DEFAULTS: AppSettings = {
   backupsPerChannel: 20,
   sortTimeLimitSec: 10,
   scoreCode: DEFAULT_SCORE_CODE,
+  watchTracker: { enabled: true, minMinutes: 5, keepPerEpisode: 5, maxAgeDays: 0 },
 };
 
 type Key = keyof AppSettings;
@@ -46,6 +56,12 @@ const VALIDATE: { [K in Key]: (v: any) => AppSettings[K] } = {
   candidates: v => Math.round(num(v, 1, 30, 'Candidates per sort')),
   backupsPerChannel: v => Math.round(num(v, 1, 100, 'Backups per channel')),
   sortTimeLimitSec: v => num(v, 1, 60, 'The sort time limit (seconds)'),
+  watchTracker: v => ({
+    enabled: v?.enabled !== false,
+    minMinutes: num(v?.minMinutes, 1, 120, 'Minutes before it counts'),
+    keepPerEpisode: Math.round(num(v?.keepPerEpisode, 1, 100, 'Watches kept per episode')),
+    maxAgeDays: Math.round(num(v?.maxAgeDays ?? 0, 0, 3650, 'Forget watches older than (days)')),
+  }),
   scoreCode: v => {
     if (typeof v !== 'string' || !/function\s+score\s*\(/.test(v)) throw new HttpError(400, 'The scoring code must define function score(ctx).');
     return v;

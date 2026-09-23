@@ -57,10 +57,15 @@ async function __main() {
     hours: makeHours,
     claude: function (opts) { return __bridge('claude', opts || {}); },
   };
+  // Watch Tracker data for this channel ({ anyChannel: true } = all channels).
+  var H = input.history || { channel: {}, any: {}, lastAired: {} };
+  function pickHistory(id, opts) { return (opts && opts.anyChannel ? H.any : H.channel)[id]; }
   var history = {
-    // Filled in by the Watch Tracker (2.1). Until then nothing has been watched.
-    watched: function () { return 0; },
-    lastAired: function () { return null; },
+    lastWatched: function (id, opts) { var e = pickHistory(id, opts); return e ? e.last : null; },
+    watches: function (id, opts) { var e = pickHistory(id, opts); return e ? e.watches.map(function (w) { return Object.assign({}, w); }) : []; },
+    watchCount: function (id, opts) { var e = pickHistory(id, opts); return e ? e.total : 0; },
+    watched: function (id, opts) { var e = pickHistory(id, opts); return e ? e.total : 0; },
+    lastAired: function (id) { var t = H.lastAired[id]; return t === undefined ? null : t; },
   };
   var ctx = {
     pool: input.pool,

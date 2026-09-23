@@ -359,7 +359,9 @@ seed: number = 1   // Random seed
 //                   hours(weeklyHours) -> { isInside(t), fractionInside(a, b) },
 //                   claude({ apiKey, prompt }) -> Promise<text>
 // ctx.globals       global variables from the Settings screen, by name
-// ctx.history       watched(id), lastAired(id)  (filled in from 2.1)
+// ctx.history       from the Watch Tracker: lastWatched(id), watchCount(id),
+//                   watches(id) -> [{ at, minutes }]; add { anyChannel: true }
+//                   for all channels. lastAired(id) = last airing here.
 //
 // To pad with filler, return { type: 'flex', durationMs } items.
 function run(ctx){

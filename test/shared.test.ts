@@ -87,3 +87,16 @@ window: number = 48
   assert.deepEqual(v, { apiKey: 'sk-1', workHours: 'Tue 08:00-12:00', order: 'b', window: 48 });
   assert.equal(resolveValues(settings, { apiKey: { $global: 'gone' } }, globals).apiKey, '');
 });
+
+test('episode titles in the formats seen in the library', async () => {
+  const { normalizeProgram } = await import('../src/channel-data.ts');
+  const t = (title: string, extra: Record<string, unknown> = {}) => normalizeProgram('x', { type: 'content', duration: 1, program: { title, ...extra } });
+  assert.deepEqual([t('The Amazing World of Gumball - S04E29 - The Points')].map(p => [p.showTitle, p.episodeLabel, p.title])[0],
+    ['The Amazing World of Gumball', 'S04E29', 'The Points']);
+  assert.equal(t('The Amazing World of Gumball - S01E21-E22 - The Goons + The Secret').episodeLabel, 'S01E21-E22');
+  const pf = t('Phineas and Ferb_S02E15_No More Bunny Business _ Spa Day', { show: { title: 'Phineas and Ferb' }, season: { index: 2 }, episodeNumber: 15 });
+  assert.deepEqual([pf.showTitle, pf.episodeLabel, pf.title], ['Phineas and Ferb', 'S02E15', 'No More Bunny Business / Spa Day']);
+  const jn = t('The Adventures of Jimmy Neutron, Boy Genius_S03E04_Fundemonium');
+  assert.deepEqual([jn.showTitle, jn.episodeLabel, jn.title], ['The Adventures of Jimmy Neutron, Boy Genius', 'S03E04', 'Fundemonium']);
+  assert.equal(t('Episode 1 / Episode 2').title, 'Episode 1 / Episode 2');
+});

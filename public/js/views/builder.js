@@ -310,7 +310,7 @@ padWith: filler list =                            // Filler list
         h('span', { class: 'k' }, 'utils'), h('span', null, 'shuffle(arr, rng), makeRng(seed), scoreSchedule(list)'),
         h('span', { class: 'k' }, 'utils.claude(o)'), h('span', null, '{ apiKey, prompt, model?, system?, maxTokens? } -> Promise<text>. The server makes the call; waiting on it does not count toward the time limit.'),
         h('span', { class: 'k' }, 'globals'), h('span', null, 'Global variables from the Settings screen, by name (read-only). A setting can also be linked to one per channel.'),
-        h('span', { class: 'k' }, 'history'), h('span', null, 'watched(id), lastAired(id): filled in by the Watch Tracker in 2.1 (0 and null until then)'),
+        h('span', { class: 'k' }, 'history'), h('span', null, 'From the Watch Tracker, for this channel: lastWatched(id) (time or null), watchCount(id) (also watched(id)), watches(id) ([{ at, minutes }], newest first). Pass { anyChannel: true } for all channels. lastAired(id): when it last started airing on this channel.'),
         h('span', { class: 'k' }, 'console.log'), h('span', null, 'Shows under the test results')),
       h('h3', null, 'Filler'),
       h('p', null, 'Return ', h('code', null, "{ type: 'flex', durationMs }"), ' items to pad, for example so shows start on the half hour.'),

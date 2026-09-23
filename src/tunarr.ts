@@ -31,6 +31,23 @@ export interface LineupItem {
   [key: string]: unknown;
 }
 
+export interface TunarrSession {
+  type: string;
+  state: string;
+  numConnections: number;
+  connections: Array<{ ip: string; userAgent?: string; lastHeartbeat?: number }>;
+}
+
+export interface NowPlaying {
+  type: string;
+  id?: string;
+  duration: number;
+  start?: number;
+  stop?: number;
+  isPaused?: boolean;
+  program?: Record<string, any>;
+}
+
 export interface ProgrammingResponse {
   name: string;
   number: number;
@@ -66,6 +83,10 @@ export const tunarr = {
   channels: () => call<TunarrChannel[]>('GET', '/api/channels'),
   channel: (id: string) => call<TunarrChannel>('GET', `/api/channels/${encodeURIComponent(id)}`),
   programming: (id: string) => call<ProgrammingResponse>('GET', `/api/channels/${encodeURIComponent(id)}/programming`, undefined, 120_000),
+  /** Open streams right now, by channel id. */
+  sessions: () => call<Record<string, TunarrSession[]>>('GET', '/api/sessions', undefined, 10_000),
+  /** What a channel is playing right now. */
+  nowPlaying: (id: string) => call<NowPlaying>('GET', `/api/channels/${encodeURIComponent(id)}/now_playing`, undefined, 10_000),
   fillerLists: () => call<Array<{ id: string; name: string; contentCount?: number }>>('GET', '/api/filler-lists'),
 
   /** Replaces (or with append, extends) a channel's lineup. */

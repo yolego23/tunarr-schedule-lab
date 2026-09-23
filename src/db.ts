@@ -74,6 +74,31 @@ CREATE TABLE IF NOT EXISTS apply_log (
 );
 CREATE INDEX IF NOT EXISTS apply_log_channel ON apply_log(channel_id, created_at DESC);
 
+-- Watch Tracker: one row per counted viewing; only the newest few per
+-- episode per channel are kept (a setting). watch_totals keeps counting.
+CREATE TABLE IF NOT EXISTS watch_events (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  channel_id    TEXT NOT NULL,
+  channel_name  TEXT NOT NULL DEFAULT '',
+  program_id    TEXT NOT NULL,
+  show_title    TEXT NOT NULL DEFAULT '',
+  title         TEXT NOT NULL DEFAULT '',
+  episode_label TEXT,
+  watched_at    INTEGER NOT NULL,
+  minutes       REAL NOT NULL,
+  duration_ms   REAL
+);
+CREATE INDEX IF NOT EXISTS watch_events_ep ON watch_events(channel_id, program_id, watched_at DESC);
+CREATE INDEX IF NOT EXISTS watch_events_time ON watch_events(watched_at DESC);
+
+CREATE TABLE IF NOT EXISTS watch_totals (
+  channel_id      TEXT NOT NULL,
+  program_id      TEXT NOT NULL,
+  total_count     INTEGER NOT NULL,
+  last_watched_at INTEGER NOT NULL,
+  PRIMARY KEY (channel_id, program_id)
+);
+
 CREATE TABLE IF NOT EXISTS global_vars (
   name        TEXT PRIMARY KEY,
   type        TEXT NOT NULL,

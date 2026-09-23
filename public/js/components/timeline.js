@@ -20,10 +20,11 @@ function tagClass(clockDeltaMin, thresholds) {
 const PAGE = 400;
 
 /**
- * timeline({ items, startMs, thresholds, newAgainst?: Set of ids, nowIndex?, away?: hours helper })
+ * timeline({ items, startMs, thresholds, newAgainst?: Set of ids, nowIndex?, away?: hours helper,
+ *            watched?: { [id]: { total, last } } from the Watch Tracker })
  * Renders rows in pages of 400 with a day header whenever the date changes.
  */
-export function timeline({ items, startMs, thresholds, newAgainst, nowIndex, away }) {
+export function timeline({ items, startMs, thresholds, newAgainst, nowIndex, away, watched }) {
   if (!items.length) return h('div', { class: 'empty' }, h('b', null, 'Empty lineup'), 'The sort returned no items.');
   const { annotated } = analyzeRepeats(items, startMs);
   const list = h('div', { class: 'tl-list' });
@@ -52,6 +53,8 @@ export function timeline({ items, startMs, thresholds, newAgainst, nowIndex, awa
         const cls = tagClass(item._clockDeltaMin, thresholds);
         tags = `<span class="tag ${cls}">↻ ${fmtDur(item._gapMs)} since last</span><span class="tag ${cls}">⏰ ${Math.round(item._clockDeltaMin)}m from last time of day</span>`;
       }
+      const w = watched && watched[item.id];
+      if (w) tags += `<span class="tag watched" title="Watched ${w.total} time${w.total === 1 ? '' : 's'} on this channel">👁 watched ${escapeHtml(new Date(w.last).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }))}${w.total > 1 ? ` · ${w.total}×` : ''}</span>`;
       const label = item.episodeLabel ? `${item.episodeLabel} · ` : '';
       html += `<div class="tl-row${isNew ? ' is-new' : ''}${i === nowIndex ? ' now' : ''}${isAway ? ' away' : ''}">
         <div class="tc">${time}</div>

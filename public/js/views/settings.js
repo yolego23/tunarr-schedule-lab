@@ -17,6 +17,17 @@ export async function render(root) {
     h('p', { class: 'dim' }, 'Global settings apply to the whole app. Global variables are shared values every sort can read, and any channel setting can link to.'),
     globalsCard,
     settingCard({
+      title: 'Watch Tracker',
+      note: 'An episode counts as watched on a channel once it has streamed for the minimum minutes. Only the newest watches per episode per channel are kept; the watch count keeps counting. Set "forget after" to 0 to keep watches until newer ones replace them.',
+      key: 'watchTracker',
+      fields: v => [
+        checkField('Track what\'s watched', v.enabled, x => { v.enabled = x; }),
+        numberField('Minutes before it counts', v.minMinutes, 1, x => { v.minMinutes = x; }),
+        numberField('Watches kept per episode', v.keepPerEpisode, 1, x => { v.keepPerEpisode = x; }),
+        numberField('Forget watches after (days, 0 = never)', v.maxAgeDays, 1, x => { v.maxAgeDays = x; }),
+      ],
+    }),
+    settingCard({
       title: 'Defaults for new channels',
       note: 'Used for channels you haven\'t set up yet. Channels you\'ve saved keep their own values.',
       key: 'channelDefaults',

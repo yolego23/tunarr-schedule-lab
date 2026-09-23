@@ -70,3 +70,15 @@ test('a shorter time limit applies', async () => {
   await assert.rejects(runSort('function run(){ while(true){} }', input(), undefined, 1000), /longer than 1 seconds/);
   assert.ok(Date.now() - t0 < 5000);
 });
+
+test('ctx.history reads watch data and last-aired times', async () => {
+  const history = {
+    channel: { e1: { total: 3, last: 1000, watches: [{ at: 1000, minutes: 22 }] } },
+    any: { e1: { total: 4, last: 2000, watches: [{ at: 2000, minutes: 6, channelId: 'other' }, { at: 1000, minutes: 22, channelId: 'x' }] } },
+    lastAired: { e2: 500 },
+  };
+  const code = `function run(ctx){ const h = ctx.history; console.log([h.lastWatched('e1'), h.watchCount('e1'), h.watched('e1'), h.watches('e1').length,
+    h.lastWatched('e1', { anyChannel: true }), h.watchCount('e1', { anyChannel: true }), h.lastWatched('e5'), h.watchCount('e5'), h.lastAired('e2'), h.lastAired('e1')].join(',')); return []; }`;
+  const r = await runSort(code, { ...input(), history });
+  assert.equal(r.logs[0], '1000,3,3,1,2000,4,,0,500,');
+});

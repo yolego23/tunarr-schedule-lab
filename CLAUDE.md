@@ -44,8 +44,7 @@ Automations, Settings (global settings and global variables).
   - Split UI; Sort Builder and Library; per-channel sort and settings; Import.
   - Apply with backup first (last 20 per channel), undo/restore.
 - **2.1**:
-  - Watch Tracker (polls `/api/sessions` and `/api/channels/{id}/now_playing`; counts a
-    play after 5+ minutes) and `ctx.history`.
+  - Watch Tracker and `ctx.history` (done).
   - Filler padding with `flex` lineup items; check the guide after Apply
     (`/api/guide/channels/{id}`).
   - Automations with staggered per-channel timetables.
@@ -68,6 +67,11 @@ Automations, Settings (global settings and global variables).
 - Settings screen: global settings in `app_settings` (`src/app-settings.ts`, validated) and
   global variables in `global_vars` (`src/globals.ts`). Sorts get `ctx.globals`; a channel
   setting value `{ "$global": "name" }` links to a variable (resolved in `resolveValues`).
+- Watch Tracker (`src/watch.ts`): polls `/api/sessions` + `/now_playing` every 60 s; an airing
+  that streams `minMinutes` (default 5) is recorded in `watch_events` (newest `keepPerEpisode`,
+  default 5, per channel+episode) and `watch_totals` (running count, last watched). No device data
+  is stored. Tunarr 1.3.15 has no viewing history of its own (checked all endpoints and logs).
+  Sorts get it via `ctx.history` (`historyForSort`); Automations should use the same functions.
 
 ## Tunarr API notes (1.3.15)
 - Lineup write: `POST /api/channels/{id}/programming` with `{type:"manual", lineup:[...], append?}`.

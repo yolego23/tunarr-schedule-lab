@@ -44,8 +44,9 @@ export interface ChannelData {
   playingOffsetMs: number;
 }
 
-// "Show - S04E29 - Episode", also multi-part "Show - S01E21-E22 - A + B".
-const COMBINED_TITLE_RE = /^(.*?)\s*-\s*S(\d{1,2})E(\d{1,3})(?:\s*-\s*E?(\d{1,3}))?\s*-\s*(.*)$/i;
+// "Show - S04E29 - Episode", multi-part "Show - S01E21-E22 - A + B", and
+// underscore-separated "Show_S02E15_Episode A _ Episode B".
+const COMBINED_TITLE_RE = /^(.*?)\s*[-_]\s*S(\d{1,2})E(\d{1,3})(?:\s*-\s*E?(\d{1,3}))?\s*[-_]\s*(.*)$/i;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
 export function normalizeProgram(id: string, entry: { type: string; duration: number; program?: Record<string, any>; customShowId?: string; index?: number }): PoolItem {
@@ -62,7 +63,8 @@ export function normalizeProgram(id: string, entry: { type: string; duration: nu
     if (seasonNumber === undefined) seasonNumber = Number(m[2]);
     if (episodeNumber === undefined) episodeNumber = Number(m[3]);
     if (m[4] && Number(m[4]) > Number(m[3])) lastEpisode = Number(m[4]);
-    title = m[5].trim();
+    // " _ " joins two segments in underscore-style names.
+    title = m[5].trim().replace(/\s+_\s+/g, ' / ');
   }
   if (!showTitle) showTitle = p.type === 'movie' ? 'Movies' : '—';
   const hasSE = seasonNumber !== undefined && seasonNumber !== null && episodeNumber !== undefined && episodeNumber !== null;
@@ -123,6 +125,25 @@ export function playingPosition(items: { durationMs: number }[], startTime: numb
     pos -= items[i].durationMs;
   }
   return { index: 0, offset: 0 };
+}
+
+/**
+ * When each episode last started airing on this channel, walking back from
+ * what's playing now through the current lineup (not before the lineup's start).
+ */
+export function lastAiredMap(data: ChannelData): Record<string, number> {
+  const out: Record<string, number> = {};
+  const n = data.current.length;
+  if (!n || data.channelId === 'sample') return out;
+  let t = data.fetchedAt - data.playingOffsetMs; // start of the item playing now
+  for (let k = 0; k < n; k++) {
+    const idx = (data.playingIndex - k + n) % n;
+    if (k > 0) t -= data.current[idx].durationMs;
+    if (t < data.startTime) break;
+    const id = data.current[idx].id;
+    if (id && out[id] === undefined) out[id] = t;
+  }
+  return out;
 }
 
 const cache = new Map<string, ChannelData>();
