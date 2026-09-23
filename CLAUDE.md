@@ -39,21 +39,30 @@ Channels, Sort Builder, Sort Library, Preview & Compare, Apply & History, Watch 
 Automations, Settings (global settings and global variables).
 
 ## Releases
-- **2.0**:
+- **2.0** (tag v2.0.0, done):
   - Docker container and compose file; server-side Tunarr client.
   - Split UI; Sort Builder and Library; per-channel sort and settings; Import.
-  - Apply with backup first (last 20 per channel), undo/restore.
-- **2.1**:
-  - Watch Tracker and `ctx.history` (done).
-  - Filler padding with `flex` lineup items; check the guide after Apply
-    (`/api/guide/channels/{id}`).
+  - Apply with backup first, undo/restore. Settings screen and global variables.
+- **2.1** (in progress, 2.1.0-beta.N):
+  - Watch Tracker and `ctx.history` (done in 2.1.0-beta.1).
   - Automations with staggered per-channel timetables.
+  - Check the guide after Apply (`/api/guide/channels/{id}`).
   - Create, copy, rename, renumber and delete channels (`POST/PUT/DELETE /api/channels`).
-- **2.2**:
+- **2.2**: filler and channel immersion: filler padding with `flex` lineup items, dynamic
+  bumpers, and similar things that make a channel feel like real TV.
+- **2.3**:
   - Library search for pools (`POST /api/programs/search`); custom shows and smart
     collections as pools.
   - Checks across channels (`/api/channels/all/lineups`).
   - `append: true` applies; export as a Tunarr time-slot schedule.
+
+## Versioning (Claude does this, unasked)
+- Every push to `main` that changes what the owner sees or runs gets a version bump in
+  `package.json` (`npm version <v> --no-git-tag-version`), shown in the app's top bar.
+- Semver: patch for fixes, minor for a finished release (2.1.0), `-beta.N` while a
+  release is still in progress. After pushing, tag it (`git tag vX.Y.Z && git push --tags`);
+  GitHub Actions publishes `ghcr.io/yolego23/tunarr-schedule-lab:X.Y.Z` (and `:latest` from main).
+- CI fails a tag that doesn't match `package.json`.
 
 ## Code layout (2.0 built)
 - Node 24 runs `src/*.ts` directly (type stripping, no build). `npm run dev` (reads `.env`),

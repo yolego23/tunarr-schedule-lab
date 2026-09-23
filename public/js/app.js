@@ -96,6 +96,7 @@ async function checkStatus() {
   try {
     const s = await api('GET', '/api/status');
     store.status = s;
+    document.getElementById('appVersion').textContent = s.appVersion ? `v${s.appVersion}` : '';
     if (s.connected) {
       dot.className = 'dot live';
       text.textContent = `Tunarr ${s.version}`;

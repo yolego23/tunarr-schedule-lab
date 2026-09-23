@@ -30,6 +30,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          want="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_NAME" != "$want" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match package.json ($want)"; exit 1
+          fi
       - run: npm run typecheck
       - run: npm test
 

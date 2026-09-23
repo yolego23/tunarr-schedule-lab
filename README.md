@@ -14,9 +14,11 @@ docker compose pull && docker compose up -d
 
 The image `ghcr.io/yolego23/tunarr-schedule-lab:latest` (amd64 and arm64) is
 built and published by GitHub Actions on every push to `main`, after the tests
-pass. Tag a release (`git tag v2.0.1 && git push --tags`) to also get a pinned
-`:2.0.1` image. To build locally instead, run `docker compose up -d --build`
-from a checkout.
+pass. Each release is also published under its version number (for example
+`:2.0.0` or `:2.1.0-beta.1`); put that in place of `latest` in
+`docker-compose.yml` to pin a version or roll back. The version running is
+shown next to the name in the app's top bar. To build locally instead, run
+`docker compose up -d --build` from a checkout.
 
 To update later: `docker compose pull && docker compose up -d`.
 
@@ -137,10 +139,16 @@ npm run dev
 `npm run dev` reads `.env` (e.g. `TUNARR_URL=...`, `PORT=8766`,
 `DATA_DIR=./data`). `npm test` runs the tests; `npm run typecheck` runs `tsc`.
 
-## Coming next
+## Releases
 
-- **2.1**: filler padding, guide check after Apply, Automations with
-  per-channel timetables (using the watch history), create/copy/rename/delete channels.
-  (The Watch Tracker and `ctx.history` are done.)
-- **2.2**: library search for pools, custom shows and smart collections as
-  pools, checks across channels, append applies, export as a time-slot schedule.
+- **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
+  per-channel sorts and settings, Apply with backup/undo/restore, Settings
+  and global variables.
+- **2.1** (now 2.1.0-beta.1): Watch Tracker and `ctx.history` (done);
+  Automations with per-channel timetables, a guide check after Apply, and
+  creating/copying/renaming/deleting channels are next.
+- **2.2**: filler and channel immersion: filler padding, dynamic bumpers and
+  similar touches that make a channel feel like real TV.
+- **2.3**: library search for pools, custom shows and smart collections as
+  pools, checks across channels, add-to-the-end applies, export as a Tunarr
+  time-slot schedule.
