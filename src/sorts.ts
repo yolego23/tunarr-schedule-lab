@@ -135,13 +135,13 @@ export function deleteSort(sortId: number) {
   db.prepare('DELETE FROM sorts WHERE id = ?').run(sortId);
 }
 
-/** Loads the 1.8 sorts as ordinary entries. Skips any whose name is already taken. */
+/** Loads the starter sorts (the 1.8 ones and newer) as ordinary entries. Skips any whose name is already taken. */
 export function importPresets() {
   const added: string[] = [];
   const skipped: string[] = [];
   for (const p of PRESET_SORTS) {
     if (db.prepare('SELECT 1 FROM sorts WHERE lower(name) = lower(?)').get(p.name)) { skipped.push(p.name); continue; }
-    createSort({ ...p, note: 'Imported from Schedule Lab 1.8' });
+    createSort({ ...p, note: p.note || 'Imported from Schedule Lab 1.8' });
     added.push(p.name);
   }
   return { added, skipped };

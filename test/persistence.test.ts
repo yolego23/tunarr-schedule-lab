@@ -6,6 +6,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { PRESET_SORTS } from '../src/presets.ts';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-persist-'));
 const port = 20000 + Math.floor(Math.random() * 20000);
@@ -57,7 +58,7 @@ test('everything saved is still there after a restart', async () => {
     assert.deepEqual(setup.values, { workHours: { $global: 'houseHours' }, bufferMin: 15 });
     assert.equal(setup.targetHours, 96);
     assert.equal(setup.alignStart, false);
-    assert.equal((await call('GET', '/api/sorts')).length, 5);
+    assert.equal((await call('GET', '/api/sorts')).length, PRESET_SORTS.length);
     assert.equal((await call('GET', '/api/settings')).backupsPerChannel, 7);
     assert.equal((await call('GET', '/api/globals'))[0].value, 'Mon-Fri 09:00-17:00');
   } finally {

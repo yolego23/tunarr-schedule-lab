@@ -215,7 +215,7 @@ export async function render(root, { go }) {
       h('option', { value: '' }, '(pick a sort)'),
       (store.sorts || []).map(x => h('option', { value: x.id, selected: x.id === s.sortId }, x.name)));
     async function drawSettings() {
-      if (!s.sortId) { clear(settingsBox, h('p', { class: 'dim small' }, store.sorts?.length ? 'Pick a sort to see its settings.' : 'The Sort Library is empty: import the 1.8 sorts or write one first.')); return; }
+      if (!s.sortId) { clear(settingsBox, h('p', { class: 'dim small' }, store.sorts?.length ? 'Pick a sort to see its settings.' : 'The Sort Library is empty: import the starter sorts or write one first.')); return; }
       const v = await api('GET', `/api/sorts/${s.sortId}/versions/${s.sortVersion}`);
       const { settings } = parseSettings(v.code);
       clear(settingsBox,

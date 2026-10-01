@@ -1,5 +1,6 @@
 // Starter automations, loaded into the Automation Library by the Import
 // button as ordinary entries the user can edit or delete.
+import fs from 'node:fs';
 
 export interface PresetAutomation {
   name: string;
@@ -143,6 +144,11 @@ export const PRESET_AUTOMATIONS: PresetAutomation[] = [
   { name: 'AI picks the best', description: 'Builds several lineups and lets the AI pick one (falls back to the best score without AI).', code: aiPick },
   { name: 'AI review before applying', description: 'Builds a lineup and applies it only if the AI review passes (applies as normal without AI).', code: aiReview },
   { name: 'Add new matching shows', description: 'Finds library shows matching networks/genres that the channel lacks, and suggests or adds them.', code: addMatching },
+  {
+    name: 'Smart weekly plan',
+    description: 'Rebuilds with the Smart planner sort, letting the AI plan the week (seasonal episodes, blocks, specials), and applies the best lineup.',
+    code: fs.readFileSync(new URL('./preset-code/smart-weekly-plan.js', import.meta.url), 'utf8'),
+  },
 ];
 
 export const NEW_AUTOMATION_CODE = `/* @settings

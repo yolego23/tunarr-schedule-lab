@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { PRESET_SORTS } from '../src/presets.ts';
 
 // Use a throwaway database.
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lab-test-'));
@@ -16,10 +17,10 @@ before(async () => {
 
 test('import presets once, then skip duplicates', () => {
   const first = sorts.importPresets();
-  assert.equal(first.added.length, 5);
+  assert.equal(first.added.length, PRESET_SORTS.length);
   const again = sorts.importPresets();
   assert.equal(again.added.length, 0);
-  assert.equal(again.skipped.length, 5);
+  assert.equal(again.skipped.length, PRESET_SORTS.length);
 });
 
 test('saving keeps versions and channels stay on theirs until moved up', () => {

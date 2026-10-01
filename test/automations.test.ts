@@ -223,3 +223,17 @@ test('from lineup: the shows on the lineup become pool sources (button and ctx.p
   assert.deepEqual(channelsMod.getSetup('c5').pool.sources.map(s => s.ref), ['show1', 'show2']);
   assert.equal((await auto.addLineupToPool('c5')).added.length, 0, 'nothing twice');
 });
+
+test('Smart weekly plan builds with the Smart planner sort and logs its plan', async () => {
+  sorts.importPresets();
+  const planner = sorts.listSorts().find(s => s.name === 'Smart planner')!;
+  channels.set('c6', { id: 'c6', number: 6, name: 'Channel c6', startTime: Date.now(), duration: 0 });
+  lineups.set('c6', [...episodes.show1, ...episodes.show2].map(e => ({ type: 'content', id: e.id, duration: e.duration })));
+  channelsMod.saveSetup('c6', { sortId: planner.id, targetHours: 24 });
+  const code = presets.PRESET_AUTOMATIONS.find(p => p.name === 'Smart weekly plan')!.code;
+  const r: any = await auto.testCode({ code, channelId: 'c6', values: { useAi: false } });
+  assert.equal(r.status, 'done', r.message);
+  assert.match(r.changes[0].detail, /^Would apply Smart planner v1/);
+  assert.ok(r.logs.some((l: string) => l.startsWith('Smart planner:')), r.logs.join('\n'));
+  assert.ok(!r.logs.some((l: string) => /isn't "Smart planner"/.test(l)));
+});

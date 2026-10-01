@@ -62,6 +62,8 @@ Automations, Settings (global settings and global variables).
   - Rebuild on the channel page (2.1.0-beta.11): Channels tabs Setup / Rebuild / Lineup now, ↻ quick rebuild
     in the list, Compare applies directly, Apply & History became History (`#/apply` still works).
     Shared UI in `public/js/components/rebuild.js` (applyPreviewTo, undoLast, guideCheckCard, rebuildTab).
+  - Starter "Smart planner" sort + "Smart weekly plan" automation (2.1.0-beta.12). Longer starter code
+    lives as plain files in `src/preset-code/` (read by presets.ts / automation-presets.ts).
   - 2.1.0 = the owner has tested all of 2.1 on the server.
   - Full 2.1 plan: the claude.ai plan doc, section "2.1 plan". Library search is
     `POST /api/programs/search` (filter on e.g. `studio.name`, `genres.name`, `type`; facets via

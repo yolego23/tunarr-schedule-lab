@@ -47,9 +47,10 @@ use a VPN to reach it from outside.
 
 ## First steps
 
-1. **Sort Library → Import 1.8 sorts** loads no-repeat shuffle, full cycle,
-   time-block insert, AI optimizer and the work-schedule sort as ordinary,
-   editable entries. The app has no built-in sorts.
+1. **Sort Library → Import starter sorts** loads the 1.8 sorts (no-repeat
+   shuffle, full cycle, time-block insert, AI optimizer, work-schedule sort)
+   and **Smart planner** as ordinary, editable entries. The app has no
+   built-in sorts.
 2. **Channels → Setup tab**: pick a channel, choose its sort, fill in that
    channel's settings (work hours are painted on a week grid) and the lineup
    length. Changes save automatically.
@@ -147,8 +148,33 @@ overnight window (Settings → Automations), at a different spot per channel.
 Runs wait in one queue, one or two at a time.
 
 **Import starter automations** loads: Weekly rebuild, Rebuild when running
-low, Best of several, AI picks the best, AI review before applying, and Add
-new matching shows. They are ordinary entries: edit, copy or delete them.
+low, Best of several, AI picks the best, AI review before applying, Add
+new matching shows, and Smart weekly plan. They are ordinary entries: edit,
+copy or delete them.
+
+### Smart planner + Smart weekly plan
+
+**Smart planner** (a sort) plans the week like a programmer would:
+
+- **Home vs away:** fresh episodes go where you're home and awake. Work and
+  sleep hours get reruns, as in the Work-schedule sort.
+- **Watch history:** episodes watched in the last `noRepeatDays` (14) aren't
+  replayed while you're home.
+- **Seasons:** holiday episodes (Christmas, Halloween, Thanksgiving, and so on)
+  stay off the air outside their time of year and are featured during it.
+- **Blocks (optional):** themed blocks (`Sat 08:00-11:00 = Adventure Time,
+  Regular Show`) play only those shows.
+- **Specials (optional):** season-0 or "special" episodes. Seasonal ones air
+  at the special time when in season; "one a week" airs one weekly; "never"
+  turns special slots off.
+- **AI (optional):** with `useAi` on, one AI call reads every episode title
+  and plans the week: what to keep off the air, what to feature, blocks and
+  specials. If the AI is off or fails, the built-in rules above are used.
+
+**Smart weekly plan** (an automation) rebuilds with that sort with the AI
+switched on for that run only, so previews you build by hand stay quick and
+free. Give the channel the Smart planner sort, add the automation (weekly,
+for example), and allow AI for sorts in Settings → AI.
 
 Rules every automation follows, whatever its code says:
 
@@ -289,7 +315,7 @@ npm run dev
 - **2.0.0**: the Docker app: tools split out, Sort Builder and Library,
   per-channel sorts and settings, Apply with backup/undo/restore, Settings
   and global variables.
-- **2.1** (now 2.1.0-beta.11): Watch Tracker and `ctx.history`, AI settings,
+- **2.1** (now 2.1.0-beta.12): Watch Tracker and `ctx.history`, AI settings,
   channel management, the guide check, pool sources, the Channel Builder and
   coded Automations with their library are done; library rules moved into
   automations.

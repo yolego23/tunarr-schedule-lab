@@ -16,9 +16,9 @@ export async function render(root, { go }) {
         const r = await api('POST', '/api/sorts/import-presets');
         toast(r.added.length
           ? `Imported ${r.added.join(', ')}.${r.skipped.length ? ` Skipped ${r.skipped.join(', ')} (already in the library).` : ''}`
-          : 'All the 1.8 sorts are already in the library (by name). Rename or delete one to import it again.', r.added.length ? 'ok' : 'warn', 8000);
+          : 'All the starter sorts are already in the library (by name). Rename or delete one to import it again.', r.added.length ? 'ok' : 'warn', 8000);
         await draw(true);
-      }) }, 'Import 1.8 sorts'),
+      }) }, 'Import starter sorts'),
       h('button', { class: 'btn', onclick: async () => {
         const data = await pickJsonFile();
         if (!data) return;
@@ -37,7 +37,7 @@ export async function render(root, { go }) {
       clear(body, h('h2', null, 'Sort Library'), toolbar,
         h('div', { class: 'card' }, h('div', { class: 'empty' },
           h('b', null, 'The library is empty'),
-          'Schedule Lab has no built-in sorts. Import the five 1.8 sorts (no-repeat shuffle, full cycle, time-block insert, AI optimizer, work-schedule sort) as a starting point, or write your own in the Sort Builder.')));
+          'Schedule Lab has no built-in sorts. Import the starter sorts (the five 1.8 sorts: no-repeat shuffle, full cycle, time-block insert, AI optimizer, work-schedule sort; plus Smart planner) as a starting point, or write your own in the Sort Builder.')));
       return;
     }
 

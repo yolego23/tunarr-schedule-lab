@@ -14,7 +14,7 @@ function jsFiles(dir: string): string[] {
 }
 
 test('every browser and shared script parses', () => {
-  const files = [...jsFiles('public/js'), ...jsFiles('src/shared'), ...jsFiles('src/sandbox')];
+  const files = [...jsFiles('public/js'), ...jsFiles('src/shared'), ...jsFiles('src/sandbox'), ...jsFiles('src/preset-code')];
   assert.ok(files.length > 20);
   const bad = files.flatMap(f => {
     const r = spawnSync(process.execPath, ['--check', f], { encoding: 'utf8' });

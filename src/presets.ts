@@ -1,11 +1,16 @@
-// The 1.8 sorts, loaded into the library by the Import button as ordinary
-// entries the user can edit or delete. Nothing in the app depends on them.
+// Starter sorts: the 1.8 sorts plus newer ones, loaded into the library by the
+// Import button as ordinary entries the user can edit or delete. Nothing in the
+// app depends on them. Longer ones live as plain files in src/preset-code/.
+import fs from 'node:fs';
 
 export interface PresetSort {
   name: string;
   description: string;
   code: string;
+  note?: string;
 }
+
+const presetFile = (name: string) => fs.readFileSync(new URL(`./preset-code/${name}`, import.meta.url), 'utf8');
 
 const shuffle = `/* @settings
 repeatWindowHours: number = 48   // Repeat window (hours)
@@ -343,6 +348,11 @@ export const PRESET_SORTS: PresetSort[] = [
   { name: 'Time-block insert', description: 'Keeps the current lineup and slots new episodes into a daily time block.', code: timeBlock },
   { name: 'AI optimizer', description: 'Builds several shuffles and asks Claude to pick the best (needs an Anthropic API key), else uses a local heuristic.', code: aiOptimizer },
   { name: 'Work-schedule sort', description: 'Saves fresh episodes for when you are home and awake; plays reruns during work and sleep hours.', code: workSchedule },
+  {
+    name: 'Smart planner',
+    description: 'Work-schedule sort plus watch history, seasonal episodes kept to their time of year, themed blocks and optional specials; can let the AI plan the week.',
+    code: presetFile('smart-planner.js'), note: 'Starter sort',
+  },
 ];
 
 /** Starting code for a new sort in the Sort Builder. */

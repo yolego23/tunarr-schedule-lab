@@ -432,6 +432,17 @@ async function run(ctx) {
 
 ---
 
+### Bigger examples
+
+The starter **Smart planner** sort (`src/preset-code/smart-planner.js` in the
+repo) shows a full planner: home vs away hours, watch history, seasonal
+episodes, themed blocks, specials, and an optional single AI call that plans
+the week, with a fallback to built-in rules. **Smart weekly plan**
+(`src/preset-code/smart-weekly-plan.js`) is the automation that drives it,
+passing `params: { useAi: true }` to `ctx.build()` so the AI is used only for
+the weekly rebuild. That's a good pattern when a sort has an expensive
+option.
+
 ## 4. Common mistakes
 
 | Mistake | Fix |

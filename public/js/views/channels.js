@@ -213,14 +213,14 @@ Library rules now live in automations.`,
 
       if (!sorts.length) {
         clear(sortCard, h('h3', null, 'Sort'),
-          h('p', null, 'The library is empty. Import the 1.8 sorts or write one in the Sort Builder.'),
+          h('p', null, 'The library is empty. Import the starter sorts or write one in the Sort Builder.'),
           h('div', { class: 'btn-row' },
             h('button', { class: 'btn primary', onclick: e => busy(e.currentTarget, async () => {
               const r = await api('POST', '/api/sorts/import-presets');
               toast(`Imported ${r.added.length} sort(s).`, 'ok');
               await loadSorts(true);
               drawSort();
-            }) }, 'Import 1.8 sorts'),
+            }) }, 'Import starter sorts'),
             h('button', { class: 'btn', onclick: () => go('builder') }, 'Open Sort Builder')));
         settings = [];
         drawSettings();
